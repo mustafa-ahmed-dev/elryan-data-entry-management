@@ -1,0 +1,36 @@
+{
+  "name": "data-entry-management",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.90.11",
+    "argon2": "^0.44.0",
+    "date-fns": "^4.1.0",
+    "drizzle-orm": "^0.44.7",
+    "exceljs": "^4.4.0",
+    "lucide-react": "^0.555.0",
+    "next": "16.0.4",
+    "next-auth": "^4.24.13",
+    "postgres": "^3.4.7",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "recharts": "^3.5.0",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.25",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.7",
+    "eslint": "^9",
+    "eslint-config-next": "16.0.4",
+    "tsx": "^4.20.6",
+    "typescript": "^5"
+  }
+}
