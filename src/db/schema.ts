@@ -2,380 +2,326 @@ import {
   pgTable,
   serial,
   varchar,
-  timestamp,
-  integer,
   text,
+  timestamp,
   boolean,
-  decimal,
-  pgEnum,
-  time,
+  integer,
+  json,
   date,
-  index,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
-// ============= ENUMS =============
-export const imageQualityEnum = pgEnum("image_quality", ["good", "bad"]);
-export const orderCorrectnessEnum = pgEnum("order_correctness", [
-  "correct",
-  "incorrect",
-]);
-export const storageTypeEnum = pgEnum("storage_type", ["local", "gcs"]);
+// ============================================================================
+// REFERENCE TABLES (Static/Configuration Data)
+// ============================================================================
 
-// ============= TEAMS =============
-export const teams = pgTable(
-  "teams",
-  {
-    id: serial("id").primaryKey(),
-    name: varchar("name", { length: 255 }).notNull(),
-    description: text("description"),
-    leaderId: integer("leader_id"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
-    deactivatedAt: timestamp("deactivated_at"),
-    createdBy: integer("created_by"),
-    updatedBy: integer("updated_by"),
-    deactivatedBy: integer("deactivated_by"),
-  },
-  (table) => ({
-    leaderIdx: index("idx_teams_leader").on(table.leaderId),
-  })
-);
-
-// ============= USERS =============
-export const users = pgTable(
-  "users",
-  {
-    id: serial("id").primaryKey(),
-    email: varchar("email", { length: 255 }).notNull().unique(),
-    name: varchar("name", { length: 255 }).notNull(),
-    password: varchar("password", { length: 255 }).notNull(),
-    teamId: integer("team_id").references(() => teams.id),
-    isTeamLeader: boolean("is_team_leader").default(false).notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
-    deactivatedAt: timestamp("deactivated_at"),
-    createdBy: integer("created_by"),
-    updatedBy: integer("updated_by"),
-    deactivatedBy: integer("deactivated_by"),
-  },
-  (table) => ({
-    emailIdx: index("idx_users_email").on(table.email),
-    teamIdx: index("idx_users_team").on(table.teamId),
-  })
-);
-
-// ============= ENTRY TYPES (Lookup) =============
+/**
+ * Entry Types - Types of data entry operations
+ * e.g., "Product Entry", "Brand Entry", "SKU Update"
+ */
 export const entryTypes = pgTable("entry_types", {
   id: serial("id").primaryKey(),
-  name: varchar("name", { length: 255 }).notNull(),
-  code: varchar("code", { length: 50 }).notNull().unique(),
+  name: varchar("name", { length: 100 }).notNull().unique(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ============================================================================
+// ORGANIZATIONAL TABLES
+// ============================================================================
+
+/**
+ * Teams - Data entry teams
+ */
+export const teams = pgTable("teams", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 100 }).notNull().unique(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+/**
+ * Users - Employees, team leaders, and admins
+ */
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  fullName: varchar("full_name", { length: 200 }).notNull(),
+  email: varchar("email", { length: 255 }).notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  role: varchar("role", { length: 50 }).notNull(),
+  teamId: integer("team_id").references(() => teams.id),
   isActive: boolean("is_active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  createdBy: integer("created_by").references(() => users.id),
-  updatedBy: integer("updated_by").references(() => users.id),
 });
 
-// ============= ENTRIES =============
-export const entries = pgTable(
-  "entries",
-  {
-    id: serial("id").primaryKey(),
-    skuOrBrand: varchar("sku_or_brand", { length: 255 }).notNull(),
-    entryTypeId: integer("entry_type_id")
-      .references(() => entryTypes.id)
-      .notNull(),
-    enteredAt: timestamp("entered_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
-    enteredBy: integer("entered_by")
-      .references(() => users.id)
-      .notNull(),
-    updatedBy: integer("updated_by").references(() => users.id),
-  },
-  (table) => ({
-    enteredByIdx: index("idx_entries_entered_by").on(table.enteredBy),
-    entryTypeIdx: index("idx_entries_entry_type").on(table.entryTypeId),
-    enteredAtIdx: index("idx_entries_entered_at").on(table.enteredAt),
-  })
-);
-
-// ============= NAMING ORDER TYPES (Lookup) =============
-export const namingOrderTypes = pgTable("naming_order_types", {
+/**
+ * Weekly Schedules - Employee work schedules by week
+ * Team leaders create, admins approve
+ * Once approved, only admins can modify
+ */
+export const weeklySchedules = pgTable("weekly_schedules", {
   id: serial("id").primaryKey(),
-  name: varchar("name", { length: 255 }).notNull(),
-  description: text("description"),
-  isActive: boolean("is_active").default(true).notNull(),
+  userId: integer("user_id")
+    .references(() => users.id)
+    .notNull(),
+  weekStartDate: date("week_start_date").notNull(), // Monday of the week
+  weekEndDate: date("week_end_date").notNull(), // Sunday of the week
+  scheduleData: json("schedule_data")
+    .$type<{
+      monday?: { start: string; end: string; isWorking: boolean };
+      tuesday?: { start: string; end: string; isWorking: boolean };
+      wednesday?: { start: string; end: string; isWorking: boolean };
+      thursday?: { start: string; end: string; isWorking: boolean };
+      friday?: { start: string; end: string; isWorking: boolean };
+      saturday?: { start: string; end: string; isWorking: boolean };
+      sunday?: { start: string; end: string; isWorking: boolean };
+    }>()
+    .notNull(),
+  createdBy: integer("created_by")
+    .references(() => users.id)
+    .notNull(), // Team leader or admin
+  status: varchar("status", { length: 50 })
+    .notNull()
+    .default("pending_approval"), // 'pending_approval', 'approved', 'rejected'
+  approvedBy: integer("approved_by").references(() => users.id), // Admin who approved/rejected
+  approvalDate: timestamp("approval_date"),
+  rejectionReason: text("rejection_reason"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-  createdBy: integer("created_by").references(() => users.id),
-});
-
-// ============= SPECIFICATION ORDER TYPES (Lookup) =============
-export const specificationOrderTypes = pgTable("specification_order_types", {
-  id: serial("id").primaryKey(),
-  name: varchar("name", { length: 255 }).notNull(),
-  description: text("description"),
-  isActive: boolean("is_active").default(true).notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  createdBy: integer("created_by").references(() => users.id),
-});
-
-// ============= UNWANTED KEYWORDS (Lookup) =============
-export const unwantedKeywords = pgTable("unwanted_keywords", {
-  id: serial("id").primaryKey(),
-  keyword: varchar("keyword", { length: 255 }).notNull(),
-  description: text("description"),
-  isActive: boolean("is_active").default(true).notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  createdBy: integer("created_by").references(() => users.id),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  updatedBy: integer("updated_by").references(() => users.id),
 });
 
-// ============= EVALUATION RULES =============
+/**
+ * Schedule History - Track all changes to schedules
+ * For audit trail and accountability
+ */
+export const scheduleHistory = pgTable("schedule_history", {
+  id: serial("id").primaryKey(),
+  scheduleId: integer("schedule_id")
+    .references(() => weeklySchedules.id)
+    .notNull(),
+  changedBy: integer("changed_by")
+    .references(() => users.id)
+    .notNull(),
+  changeType: varchar("change_type", { length: 50 }).notNull(), // 'created', 'approved', 'rejected', 'modified'
+  oldData: json("old_data"),
+  newData: json("new_data"),
+  reason: text("reason"),
+  changedAt: timestamp("changed_at").defaultNow().notNull(),
+});
+
+// ============================================================================
+// EVALUATION RULES
+// ============================================================================
+
+/**
+ * Evaluation Rule Sets - Versioned sets of quality rules
+ */
+export const evaluationRuleSets = pgTable("evaluation_rule_sets", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 200 }).notNull(),
+  description: text("description"),
+  isActive: boolean("is_active").default(false).notNull(),
+  version: integer("version").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+/**
+ * Evaluation Rules - Individual quality check rules
+ */
 export const evaluationRules = pgTable("evaluation_rules", {
   id: serial("id").primaryKey(),
-  name: varchar("name", { length: 255 }).notNull(),
+  ruleSetId: integer("rule_set_id")
+    .references(() => evaluationRuleSets.id)
+    .notNull(),
+  ruleName: varchar("rule_name", { length: 200 }).notNull(),
+  ruleType: varchar("rule_type", { length: 50 }).notNull(), // 'naming', 'specification', 'keyword', 'completeness', 'accuracy'
+  deductionPoints: integer("deduction_points").notNull(),
   description: text("description"),
-  entryTypeId: integer("entry_type_id").references(() => entryTypes.id),
-  minSpecificationsCount: integer("min_specifications_count"),
-  maxSpecificationsCount: integer("max_specifications_count"),
-  requiredNamingOrderId: integer("required_naming_order_id").references(
-    () => namingOrderTypes.id
-  ),
-  requiredSpecificationOrderId: integer(
-    "required_specification_order_id"
-  ).references(() => specificationOrderTypes.id),
-  minImagesCount: integer("min_images_count"),
-  maxImagesCount: integer("max_images_count"),
-  pointsPerCorrectNaming: decimal("points_per_correct_naming", {
-    precision: 10,
-    scale: 2,
-  }),
-  pointsPerCorrectSpecification: decimal("points_per_correct_specification", {
-    precision: 10,
-    scale: 2,
-  }),
-  pointsPerGoodImageQuality: decimal("points_per_good_image_quality", {
-    precision: 10,
-    scale: 2,
-  }),
-  penaltyPerUnwantedKeyword: decimal("penalty_per_unwanted_keyword", {
-    precision: 10,
-    scale: 2,
-  }),
-  isActive: boolean("is_active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-  createdBy: integer("created_by").references(() => users.id),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  updatedBy: integer("updated_by").references(() => users.id),
 });
 
-// ============= EVALUATION RULE UNWANTED KEYWORDS (Junction) =============
-export const evaluationRuleUnwantedKeywords = pgTable(
-  "evaluation_rule_unwanted_keywords",
-  {
-    id: serial("id").primaryKey(),
-    evaluationRuleId: integer("evaluation_rule_id")
-      .references(() => evaluationRules.id)
-      .notNull(),
-    unwantedKeywordId: integer("unwanted_keyword_id")
-      .references(() => unwantedKeywords.id)
-      .notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-  },
-  (table) => ({
-    ruleIdx: index("idx_eval_rule_keywords_rule").on(table.evaluationRuleId),
-    keywordIdx: index("idx_eval_rule_keywords_keyword").on(
-      table.unwantedKeywordId
-    ),
-  })
-);
+// ============================================================================
+// ENTRIES (Main Data Entry Records)
+// ============================================================================
 
-// ============= QUALITY EVALUATIONS =============
-export const qualityEvaluations = pgTable(
-  "quality_evaluations",
-  {
-    id: serial("id").primaryKey(),
-    userId: integer("user_id")
-      .references(() => users.id)
-      .notNull(),
-    evaluationDate: date("evaluation_date").notNull(),
-    entryTypeId: integer("entry_type_id")
-      .references(() => entryTypes.id)
-      .notNull(),
-    evaluationRuleId: integer("evaluation_rule_id")
-      .references(() => evaluationRules.id)
-      .notNull(),
-    sku: varchar("sku", { length: 255 }).notNull(),
-    numberOfImages: integer("number_of_images").notNull(),
-    imageQuality: imageQualityEnum("image_quality").notNull(),
-    numberOfSpecifications: integer("number_of_specifications").notNull(),
-    namingOrder: orderCorrectnessEnum("naming_order").notNull(),
-    specificationsOrder: orderCorrectnessEnum("specifications_order").notNull(),
-    unwantedInformation: text("unwanted_information"),
-    notes: text("notes"),
-    totalScore: decimal("total_score", { precision: 10, scale: 2 }).notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    createdBy: integer("created_by")
-      .references(() => users.id)
-      .notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
-    updatedBy: integer("updated_by").references(() => users.id),
-  },
-  (table) => ({
-    userIdx: index("idx_quality_evaluations_user").on(table.userId),
-    dateIdx: index("idx_quality_evaluations_date").on(table.evaluationDate),
-    entryTypeIdx: index("idx_quality_evaluations_entry_type").on(
-      table.entryTypeId
-    ),
-    createdByIdx: index("idx_quality_evaluations_created_by").on(
-      table.createdBy
-    ),
-  })
-);
-
-// ============= EVALUATION ATTACHMENTS =============
-export const evaluationAttachments = pgTable(
-  "evaluation_attachments",
-  {
-    id: serial("id").primaryKey(),
-    qualityEvaluationId: integer("quality_evaluation_id")
-      .references(() => qualityEvaluations.id)
-      .notNull(),
-    fileName: varchar("file_name", { length: 255 }).notNull(),
-    filePath: varchar("file_path", { length: 500 }).notNull(),
-    storageType: storageTypeEnum("storage_type").default("local").notNull(),
-    gcsBucket: varchar("gcs_bucket", { length: 255 }),
-    gcsObjectName: varchar("gcs_object_name", { length: 500 }),
-    fileType: varchar("file_type", { length: 100 }).notNull(),
-    fileSize: integer("file_size").notNull(),
-    uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
-    uploadedBy: integer("uploaded_by")
-      .references(() => users.id)
-      .notNull(),
-  },
-  (table) => ({
-    evaluationIdx: index("idx_eval_attachments_evaluation").on(
-      table.qualityEvaluationId
-    ),
-  })
-);
-
-// ============= SHIFT SCHEDULES =============
-export const shiftSchedules = pgTable("shift_schedules", {
+/**
+ * Entries - Data entry records submitted by employees
+ * Simplified: boolean flags instead of reference tables
+ * Timestamp-only tracking for productivity analysis
+ */
+export const entries = pgTable("entries", {
   id: serial("id").primaryKey(),
-  teamId: integer("team_id").references(() => teams.id),
-  shiftStartTime: time("shift_start_time").notNull(),
-  shiftEndTime: time("shift_end_time").notNull(),
-  isActive: boolean("is_active").default(true).notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  createdBy: integer("created_by").references(() => users.id),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  updatedBy: integer("updated_by").references(() => users.id),
+  employeeId: integer("employee_id")
+    .references(() => users.id)
+    .notNull(),
+  entryTypeId: integer("entry_type_id")
+    .references(() => entryTypes.id)
+    .notNull(),
+  productName: varchar("product_name", { length: 500 }).notNull(),
+  productDescription: text("product_description"),
+
+  // Simplified boolean flags (evaluator determines)
+  followsNamingConvention: boolean("follows_naming_convention")
+    .default(true)
+    .notNull(),
+  followsSpecificationOrder: boolean("follows_specification_order")
+    .default(true)
+    .notNull(),
+  containsUnwantedKeywords: boolean("contains_unwanted_keywords")
+    .default(false)
+    .notNull(),
+
+  // Timestamp-only tracking (best practice)
+  entryTime: timestamp("entry_time").defaultNow().notNull(),
 });
 
-// ============= ENTRY TIME LOGS =============
-export const entryTimeLogs = pgTable(
-  "entry_time_logs",
-  {
-    id: serial("id").primaryKey(),
-    entryId: integer("entry_id")
-      .references(() => entries.id)
-      .notNull(),
-    userId: integer("user_id")
-      .references(() => users.id)
-      .notNull(),
-    previousEntryId: integer("previous_entry_id").references(() => entries.id),
-    timeTakenSeconds: integer("time_taken_seconds").notNull(),
-    isFirstOfDay: boolean("is_first_of_day").default(false).notNull(),
-    calculatedAt: timestamp("calculated_at").defaultNow().notNull(),
-    entryDate: date("entry_date").notNull(),
-  },
-  (table) => ({
-    userIdx: index("idx_entry_time_logs_user").on(table.userId),
-    dateIdx: index("idx_entry_time_logs_date").on(table.entryDate),
-  })
-);
+// ============================================================================
+// QUALITY EVALUATIONS
+// ============================================================================
 
-// ============= DAILY SUMMARIES =============
-export const dailySummaries = pgTable(
-  "daily_summaries",
-  {
-    id: serial("id").primaryKey(),
-    userId: integer("user_id")
-      .references(() => users.id)
-      .notNull(),
-    teamId: integer("team_id")
-      .references(() => teams.id)
-      .notNull(),
-    summaryDate: date("summary_date").notNull(),
-    entryTypeId: integer("entry_type_id")
-      .references(() => entryTypes.id)
-      .notNull(),
-    totalEntries: integer("total_entries").default(0).notNull(),
-    averageTimeSeconds: decimal("average_time_seconds", {
-      precision: 10,
-      scale: 2,
-    }),
-    totalEvaluations: integer("total_evaluations").default(0).notNull(),
-    averageScore: decimal("average_score", { precision: 10, scale: 2 }),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  },
-  (table) => ({
-    userTeamDateIdx: index("idx_daily_summaries_user_team_date").on(
-      table.userId,
-      table.teamId,
-      table.summaryDate
-    ),
-  })
-);
+/**
+ * Quality Evaluations - Quality assessments of entries
+ */
+export const qualityEvaluations = pgTable("quality_evaluations", {
+  id: serial("id").primaryKey(),
+  entryId: integer("entry_id")
+    .references(() => entries.id)
+    .notNull(),
+  evaluatorId: integer("evaluator_id")
+    .references(() => users.id)
+    .notNull(),
+  ruleSetId: integer("rule_set_id")
+    .references(() => evaluationRuleSets.id)
+    .notNull(),
+  totalScore: integer("total_score").notNull(), // Score out of 100
+  violations: json("violations").notNull().$type<
+    Array<{
+      ruleId: number;
+      ruleName: string;
+      deduction: number;
+    }>
+  >(),
+  comments: text("comments"),
+  evaluatedAt: timestamp("evaluated_at").defaultNow().notNull(),
+});
 
-// ============= RELATIONS =============
-export const teamsRelations = relations(teams, ({ one, many }) => ({
-  leader: one(users, {
-    fields: [teams.leaderId],
-    references: [users.id],
-  }),
-  members: many(users),
+// ============================================================================
+// RELATIONS
+// ============================================================================
+
+// Teams Relations
+export const teamsRelations = relations(teams, ({ many }) => ({
+  users: many(users),
 }));
 
+// Users Relations
 export const usersRelations = relations(users, ({ one, many }) => ({
   team: one(teams, {
     fields: [users.teamId],
     references: [teams.id],
   }),
+  schedules: many(weeklySchedules, { relationName: "userSchedules" }),
+  createdSchedules: many(weeklySchedules, { relationName: "createdSchedules" }),
+  approvedSchedules: many(weeklySchedules, {
+    relationName: "approvedSchedules",
+  }),
+  scheduleHistoryChanges: many(scheduleHistory),
   entries: many(entries),
-  qualityEvaluations: many(qualityEvaluations),
+  evaluations: many(qualityEvaluations),
 }));
 
-export const entriesRelations = relations(entries, ({ one }) => ({
+// Weekly Schedules Relations
+export const weeklySchedulesRelations = relations(
+  weeklySchedules,
+  ({ one, many }) => ({
+    user: one(users, {
+      fields: [weeklySchedules.userId],
+      references: [users.id],
+      relationName: "userSchedules",
+    }),
+    creator: one(users, {
+      fields: [weeklySchedules.createdBy],
+      references: [users.id],
+      relationName: "createdSchedules",
+    }),
+    approver: one(users, {
+      fields: [weeklySchedules.approvedBy],
+      references: [users.id],
+      relationName: "approvedSchedules",
+    }),
+    history: many(scheduleHistory),
+  })
+);
+
+// Schedule History Relations
+export const scheduleHistoryRelations = relations(
+  scheduleHistory,
+  ({ one }) => ({
+    schedule: one(weeklySchedules, {
+      fields: [scheduleHistory.scheduleId],
+      references: [weeklySchedules.id],
+    }),
+    changedByUser: one(users, {
+      fields: [scheduleHistory.changedBy],
+      references: [users.id],
+    }),
+  })
+);
+
+// Entry Types Relations
+export const entryTypesRelations = relations(entryTypes, ({ many }) => ({
+  entries: many(entries),
+}));
+
+// Evaluation Rule Sets Relations
+export const evaluationRuleSetsRelations = relations(
+  evaluationRuleSets,
+  ({ many }) => ({
+    rules: many(evaluationRules),
+    evaluations: many(qualityEvaluations),
+  })
+);
+
+// Evaluation Rules Relations
+export const evaluationRulesRelations = relations(
+  evaluationRules,
+  ({ one }) => ({
+    ruleSet: one(evaluationRuleSets, {
+      fields: [evaluationRules.ruleSetId],
+      references: [evaluationRuleSets.id],
+    }),
+  })
+);
+
+// Entries Relations
+export const entriesRelations = relations(entries, ({ one, many }) => ({
+  employee: one(users, {
+    fields: [entries.employeeId],
+    references: [users.id],
+  }),
   entryType: one(entryTypes, {
     fields: [entries.entryTypeId],
     references: [entryTypes.id],
   }),
-  enteredByUser: one(users, {
-    fields: [entries.enteredBy],
-    references: [users.id],
-  }),
+  evaluations: many(qualityEvaluations),
 }));
 
+// Quality Evaluations Relations
 export const qualityEvaluationsRelations = relations(
   qualityEvaluations,
-  ({ one, many }) => ({
-    user: one(users, {
-      fields: [qualityEvaluations.userId],
+  ({ one }) => ({
+    entry: one(entries, {
+      fields: [qualityEvaluations.entryId],
+      references: [entries.id],
+    }),
+    evaluator: one(users, {
+      fields: [qualityEvaluations.evaluatorId],
       references: [users.id],
     }),
-    entryType: one(entryTypes, {
-      fields: [qualityEvaluations.entryTypeId],
-      references: [entryTypes.id],
+    ruleSet: one(evaluationRuleSets, {
+      fields: [qualityEvaluations.ruleSetId],
+      references: [evaluationRuleSets.id],
     }),
-    evaluationRule: one(evaluationRules, {
-      fields: [qualityEvaluations.evaluationRuleId],
-      references: [evaluationRules.id],
-    }),
-    attachments: many(evaluationAttachments),
   })
 );

@@ -1,14 +1,37 @@
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
 import * as schema from "./schema";
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL is not defined");
+// Database connection configuration
+const pool = new Pool({
+  host: process.env.DB_HOST || "localhost",
+  port: parseInt(process.env.DB_PORT || "5432"),
+  user: process.env.DB_USER || "postgres",
+  password: process.env.DB_PASSWORD || "postgres",
+  database: process.env.DB_NAME || "data_entry_db",
+});
+
+// Create Drizzle instance with schema
+export const db = drizzle(pool, { schema });
+
+// Export pool for manual queries if needed
+export { pool };
+
+// Test database connection
+export async function testConnection() {
+  try {
+    const client = await pool.connect();
+    console.log("✅ Database connection successful");
+    client.release();
+    return true;
+  } catch (error) {
+    console.error("❌ Database connection failed:", error);
+    return false;
+  }
 }
 
-// Create the connection
-const connectionString = process.env.DATABASE_URL;
-const client = postgres(connectionString);
-
-// Export the db instance
-export const db = drizzle(client, { schema });
+// Close database connection
+export async function closeConnection() {
+  await pool.end();
+  console.log("Database connection closed");
+}

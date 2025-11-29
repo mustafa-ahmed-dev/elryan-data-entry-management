@@ -6,8 +6,25 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:generate": "drizzle-kit generate --config=drizzle.config.ts",
+    "db:migrate": "drizzle-kit migrate --config=drizzle.config.ts",
+    "db:push": "drizzle-kit push --config=drizzle.config.ts",
+    "db:studio": "drizzle-kit studio --config=drizzle.config.ts",
+    "db:seed": "tsx src/db/seed.ts",
+    "db:reset": "tsx src/db/scripts/reset.ts",
+    "db:test": "tsx src/db/scripts/test-connection.ts",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f postgres",
+    "setup": "npm run docker:up && timeout 5 && npm run db:push && npm run db:seed",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "keywords": [
+    "data-entry",
+    "quality-control",
+    "management"
+  ],
   "dependencies": {
     "@tanstack/react-query": "^5.90.11",
     "argon2": "^0.44.0",
@@ -17,6 +34,7 @@
     "lucide-react": "^0.555.0",
     "next": "16.0.4",
     "next-auth": "^4.24.13",
+    "pg": "^8.16.3",
     "postgres": "^3.4.7",
     "react": "19.2.0",
     "react-dom": "19.2.0",
@@ -25,6 +43,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.19.25",
+    "@types/pg": "^8.15.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "drizzle-kit": "^0.31.7",
