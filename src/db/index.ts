@@ -1,6 +1,8 @@
+// src/db/index.ts
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "./schema";
+import "dotenv/config"; // 👈 ADD THIS LINE!
 
 // Database connection configuration
 const pool = new Pool({
@@ -9,6 +11,7 @@ const pool = new Pool({
   user: process.env.DB_USER || "postgres",
   password: process.env.DB_PASSWORD || "postgres",
   database: process.env.DB_NAME || "data_entry_db",
+  ssl: false, // Disable SSL for local development
 });
 
 // Create Drizzle instance with schema

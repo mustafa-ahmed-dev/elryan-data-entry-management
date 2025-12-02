@@ -32,7 +32,7 @@ async function seed() {
     await db.delete(teams);
     await db.delete(entryTypes);
 
-    // 3. Admin User
+    // Create Admin User
     console.log("Creating admin user...");
     const adminPasswordHash = await hashPassword("Elryan@12345");
 
@@ -47,6 +47,24 @@ async function seed() {
         isActive: true,
       })
       .returning();
+
+    console.log("\n✅ Database seeded successfully!");
+    console.log(`
+📊 Seed Summary:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👑 ADMIN USER CREATED:
+   
+   Email: ${adminUser.email}
+   Password: Elryan@12345
+   Name: ${adminUser.fullName}
+   Role: ${adminUser.role}
+   
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔐 Login with:
+   Email: mustafa.ahmed@elryan.com
+   Password: Elryan@12345
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    `);
   } catch (error) {
     console.error("❌ Error seeding database:", error);
     throw error;

@@ -6,16 +6,20 @@ services:
     container_name: data_entry_db
     restart: always
     environment:
-      POSTGRES_USER: dataentry_user
-      POSTGRES_PASSWORD: dataentry_password
-      POSTGRES_DB: data_entry_system
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-data_entry_db}
+      PGDATA: /var/lib/postgresql/data/pgdata
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init-db:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dataentry_user -d data_entry_system"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-data_entry_db}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
