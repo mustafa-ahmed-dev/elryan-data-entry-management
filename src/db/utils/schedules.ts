@@ -1,10 +1,17 @@
+/**
+ * Schedules Database Utilities
+ * CRUD operations for weekly schedules
+ */
+
 import { db } from "../index";
-import { weeklySchedules, scheduleHistory, users } from "../schema";
-import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
+import { weeklySchedules, users, scheduleHistory } from "../schema";
+import { eq, and, or, gte, lte, desc, asc, sql } from "drizzle-orm";
 
 // ============================================================================
-// TYPE DEFINITIONS
+// TYPES
 // ============================================================================
+
+export type ScheduleStatus = "pending_approval" | "approved" | "rejected";
 
 export interface DaySchedule {
   start: string;
@@ -24,43 +31,26 @@ export interface WeekScheduleData {
 
 export interface CreateScheduleInput {
   userId: number;
-  weekStartDate: string; // 'YYYY-MM-DD'
-  weekEndDate: string; // 'YYYY-MM-DD'
+  weekStartDate: string; // YYYY-MM-DD format
+  weekEndDate: string;
   scheduleData: WeekScheduleData;
   createdBy: number;
 }
 
-export interface ScheduleWithDetails {
-  id: number;
-  userId: number;
-  weekStartDate: string;
-  weekEndDate: string;
-  scheduleData: WeekScheduleData;
-  createdBy: number;
-  status: string;
-  approvedBy: number | null;
-  approvalDate: Date | null;
-  rejectionReason: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  user?: {
-    id: number;
-    fullName: string;
-    email: string;
-    role: string;
-  };
-  creator?: {
-    id: number;
-    fullName: string;
-    email: string;
-    role: string;
-  };
-  approver?: {
-    id: number;
-    fullName: string;
-    email: string;
-    role: string;
-  } | null;
+export interface UpdateScheduleInput {
+  scheduleData?: WeekScheduleData;
+  status?: ScheduleStatus;
+}
+
+export interface ScheduleFilters {
+  userId?: number;
+  teamId?: number;
+  status?: ScheduleStatus;
+  weekStartDate?: string;
+  weekEndDate?: string;
+  createdBy?: number;
+  page?: number;
+  pageSize?: number;
 }
 
 // ============================================================================
@@ -68,403 +58,321 @@ export interface ScheduleWithDetails {
 // ============================================================================
 
 /**
- * Create a new weekly schedule (Team Leader or Admin)
- * Status: pending_approval
+ * Create a new schedule
  */
-export async function createWeeklySchedule(input: CreateScheduleInput) {
-  try {
-    const [schedule] = await db
-      .insert(weeklySchedules)
-      .values({
-        userId: input.userId,
-        weekStartDate: input.weekStartDate,
-        weekEndDate: input.weekEndDate,
-        scheduleData: input.scheduleData,
-        createdBy: input.createdBy,
-        status: "pending_approval",
-      })
-      .returning();
-
-    // Create history record
-    await db.insert(scheduleHistory).values({
-      scheduleId: schedule.id,
-      changedBy: input.createdBy,
-      changeType: "created",
-      oldData: null,
-      newData: input.scheduleData,
-      reason: "Initial schedule creation",
-    });
-
-    return schedule;
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Failed to create schedule: ${error.message}`);
-    }
-    throw error;
-  }
-}
-
-// ============================================================================
-// APPROVE / REJECT (Admin Only)
-// ============================================================================
-
-/**
- * Approve a pending schedule (Admin only)
- */
-export async function approveSchedule(scheduleId: number, adminId: number) {
-  try {
-    const [schedule] = await db
-      .update(weeklySchedules)
-      .set({
-        status: "approved",
-        approvedBy: adminId,
-        approvalDate: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(weeklySchedules.id, scheduleId),
-          eq(weeklySchedules.status, "pending_approval")
+export async function createSchedule(input: CreateScheduleInput) {
+  // Check for overlapping schedules
+  const existing = await db
+    .select()
+    .from(weeklySchedules)
+    .where(
+      and(
+        eq(weeklySchedules.userId, input.userId),
+        or(
+          and(
+            lte(weeklySchedules.weekStartDate, input.weekStartDate),
+            gte(weeklySchedules.weekEndDate, input.weekStartDate)
+          ),
+          and(
+            lte(weeklySchedules.weekStartDate, input.weekEndDate),
+            gte(weeklySchedules.weekEndDate, input.weekEndDate)
+          )
         )
       )
-      .returning();
+    );
 
-    if (!schedule) {
-      throw new Error("Schedule not found or not pending approval");
-    }
-
-    // Create history record
-    await db.insert(scheduleHistory).values({
-      scheduleId: schedule.id,
-      changedBy: adminId,
-      changeType: "approved",
-      oldData: null,
-      newData: null,
-      reason: "Schedule approved by admin",
-    });
-
-    return schedule;
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Failed to approve schedule: ${error.message}`);
-    }
-    throw error;
+  if (existing.length > 0) {
+    throw new Error("Schedule already exists for this week");
   }
-}
 
-/**
- * Reject a pending schedule (Admin only)
- */
-export async function rejectSchedule(
-  scheduleId: number,
-  adminId: number,
-  reason: string
-) {
-  try {
-    const [schedule] = await db
-      .update(weeklySchedules)
-      .set({
-        status: "rejected",
-        approvedBy: adminId,
-        approvalDate: new Date(),
-        rejectionReason: reason,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(weeklySchedules.id, scheduleId),
-          eq(weeklySchedules.status, "pending_approval")
-        )
-      )
-      .returning();
+  const [schedule] = await db
+    .insert(weeklySchedules)
+    .values({
+      userId: input.userId,
+      weekStartDate: input.weekStartDate,
+      weekEndDate: input.weekEndDate,
+      scheduleData: input.scheduleData,
+      createdBy: input.createdBy,
+      status: "pending_approval",
+    })
+    .returning();
 
-    if (!schedule) {
-      throw new Error("Schedule not found or not pending approval");
-    }
+  // Create history entry
+  await createScheduleHistory({
+    scheduleId: schedule.id,
+    changeType: "created",
+    newData: input.scheduleData,
+    changedBy: input.createdBy,
+  });
 
-    // Create history record
-    await db.insert(scheduleHistory).values({
-      scheduleId: schedule.id,
-      changedBy: adminId,
-      changeType: "rejected",
-      oldData: null,
-      newData: null,
-      reason: reason,
-    });
-
-    return schedule;
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Failed to reject schedule: ${error.message}`);
-    }
-    throw error;
-  }
+  return schedule;
 }
 
 // ============================================================================
-// UPDATE (Admin Only for Approved Schedules)
+// READ
 // ============================================================================
 
 /**
- * Modify an approved schedule (Admin only)
+ * Get schedule by ID
  */
-export async function modifyApprovedSchedule(
-  scheduleId: number,
-  adminId: number,
-  newScheduleData: WeekScheduleData,
-  reason: string
-) {
-  try {
-    // Get current schedule
-    const [current] = await db
-      .select()
-      .from(weeklySchedules)
-      .where(eq(weeklySchedules.id, scheduleId))
-      .limit(1);
+export async function getScheduleById(id: number) {
+  const [schedule] = await db
+    .select({
+      id: weeklySchedules.id,
+      userId: weeklySchedules.userId,
+      userName: users.fullName,
+      userEmail: users.email,
+      weekStartDate: weeklySchedules.weekStartDate,
+      weekEndDate: weeklySchedules.weekEndDate,
+      scheduleData: weeklySchedules.scheduleData,
+      status: weeklySchedules.status,
+      createdBy: weeklySchedules.createdBy,
+      approvedBy: weeklySchedules.approvedBy,
+      approvalDate: weeklySchedules.approvalDate,
+      rejectionReason: weeklySchedules.rejectionReason,
+      createdAt: weeklySchedules.createdAt,
+      updatedAt: weeklySchedules.updatedAt,
+    })
+    .from(weeklySchedules)
+    .innerJoin(users, eq(weeklySchedules.userId, users.id))
+    .where(eq(weeklySchedules.id, id))
+    .limit(1);
 
-    if (!current) {
-      throw new Error("Schedule not found");
-    }
-
-    if (current.status !== "approved") {
-      throw new Error("Can only modify approved schedules");
-    }
-
-    // Update schedule
-    const [schedule] = await db
-      .update(weeklySchedules)
-      .set({
-        scheduleData: newScheduleData,
-        updatedAt: new Date(),
-      })
-      .where(eq(weeklySchedules.id, scheduleId))
-      .returning();
-
-    // Create history record
-    await db.insert(scheduleHistory).values({
-      scheduleId: schedule.id,
-      changedBy: adminId,
-      changeType: "modified",
-      oldData: current.scheduleData,
-      newData: newScheduleData,
-      reason: reason,
-    });
-
-    return schedule;
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Failed to modify schedule: ${error.message}`);
-    }
-    throw error;
-  }
-}
-
-// ============================================================================
-// QUERY
-// ============================================================================
-
-/**
- * Get schedule by ID with full details
- */
-export async function getScheduleById(
-  scheduleId: number
-): Promise<ScheduleWithDetails | null> {
-  try {
-    const result = await db
-      .select({
-        schedule: weeklySchedules,
-        user: {
-          id: users.id,
-          fullName: users.fullName,
-          email: users.email,
-          role: users.role,
-        },
-      })
-      .from(weeklySchedules)
-      .leftJoin(users, eq(weeklySchedules.userId, users.id))
-      .where(eq(weeklySchedules.id, scheduleId))
-      .limit(1);
-
-    if (result.length === 0) return null;
-
-    const row = result[0];
-    return {
-      ...row.schedule,
-      weekStartDate: row.schedule.weekStartDate.toString(),
-      weekEndDate: row.schedule.weekEndDate.toString(),
-      user: row.user || undefined,
-    };
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Failed to get schedule: ${error.message}`);
-    }
-    throw error;
-  }
+  return schedule || null;
 }
 
 /**
- * Get schedules by user
+ * Get schedules with filters and pagination
  */
-export async function getSchedulesByUser(userId: number) {
-  try {
-    const result = await db
-      .select()
-      .from(weeklySchedules)
-      .where(eq(weeklySchedules.userId, userId))
-      .orderBy(desc(weeklySchedules.weekStartDate));
+export async function getSchedules(filters: ScheduleFilters = {}) {
+  const {
+    userId,
+    teamId,
+    status,
+    weekStartDate,
+    weekEndDate,
+    createdBy,
+    page = 1,
+    pageSize = 10,
+  } = filters;
 
-    return result.map((schedule) => ({
-      ...schedule,
-      weekStartDate: schedule.weekStartDate.toString(),
-      weekEndDate: schedule.weekEndDate.toString(),
-    }));
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Failed to get schedules by user: ${error.message}`);
-    }
-    throw error;
+  // Build where conditions
+  const conditions = [];
+
+  if (userId !== undefined) {
+    conditions.push(eq(weeklySchedules.userId, userId));
   }
+
+  if (teamId !== undefined) {
+    conditions.push(eq(users.teamId, teamId));
+  }
+
+  if (status !== undefined) {
+    conditions.push(eq(weeklySchedules.status, status));
+  }
+
+  if (weekStartDate !== undefined) {
+    conditions.push(gte(weeklySchedules.weekStartDate, weekStartDate));
+  }
+
+  if (weekEndDate !== undefined) {
+    conditions.push(lte(weeklySchedules.weekEndDate, weekEndDate));
+  }
+
+  if (createdBy !== undefined) {
+    conditions.push(eq(weeklySchedules.createdBy, createdBy));
+  }
+
+  // Get total count
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(weeklySchedules)
+    .innerJoin(users, eq(weeklySchedules.userId, users.id))
+    .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+  // Get paginated schedules
+  const schedulesList = await db
+    .select({
+      id: weeklySchedules.id,
+      userId: weeklySchedules.userId,
+      userName: users.fullName,
+      userEmail: users.email,
+      teamId: users.teamId,
+      weekStartDate: weeklySchedules.weekStartDate,
+      weekEndDate: weeklySchedules.weekEndDate,
+      status: weeklySchedules.status,
+      createdBy: weeklySchedules.createdBy,
+      approvedBy: weeklySchedules.approvedBy,
+      createdAt: weeklySchedules.createdAt,
+    })
+    .from(weeklySchedules)
+    .innerJoin(users, eq(weeklySchedules.userId, users.id))
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(weeklySchedules.weekStartDate))
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
+
+  return {
+    data: schedulesList,
+    pagination: {
+      page,
+      pageSize,
+      total: Number(count),
+      totalPages: Math.ceil(Number(count) / pageSize),
+    },
+  };
 }
 
 /**
- * Get pending schedules (for admin approval)
+ * Get pending schedules (for approval)
  */
 export async function getPendingSchedules() {
-  try {
-    const result = await db
-      .select({
-        schedule: weeklySchedules,
-        user: {
-          id: users.id,
-          fullName: users.fullName,
-          email: users.email,
-          role: users.role,
-          teamId: users.teamId,
-        },
-      })
-      .from(weeklySchedules)
-      .leftJoin(users, eq(weeklySchedules.userId, users.id))
-      .where(eq(weeklySchedules.status, "pending_approval"))
-      .orderBy(desc(weeklySchedules.createdAt));
-
-    return result.map((row) => ({
-      ...row.schedule,
-      weekStartDate: row.schedule.weekStartDate.toString(),
-      weekEndDate: row.schedule.weekEndDate.toString(),
-      user: row.user || undefined,
-    }));
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Failed to get pending schedules: ${error.message}`);
-    }
-    throw error;
-  }
+  return await db
+    .select({
+      id: weeklySchedules.id,
+      userId: weeklySchedules.userId,
+      userName: users.fullName,
+      userEmail: users.email,
+      teamId: users.teamId,
+      weekStartDate: weeklySchedules.weekStartDate,
+      weekEndDate: weeklySchedules.weekEndDate,
+      createdBy: weeklySchedules.createdBy,
+      createdAt: weeklySchedules.createdAt,
+    })
+    .from(weeklySchedules)
+    .innerJoin(users, eq(weeklySchedules.userId, users.id))
+    .where(eq(weeklySchedules.status, "pending_approval"))
+    .orderBy(asc(weeklySchedules.createdAt));
 }
 
 /**
- * Get approved schedules for a specific week
+ * Get user schedule for specific week
  */
-export async function getApprovedSchedulesForWeek(weekStartDate: string) {
-  try {
-    const result = await db
-      .select({
-        schedule: weeklySchedules,
-        user: {
-          id: users.id,
-          fullName: users.fullName,
-          email: users.email,
-          role: users.role,
-        },
-      })
-      .from(weeklySchedules)
-      .leftJoin(users, eq(weeklySchedules.userId, users.id))
-      .where(
-        and(
-          eq(weeklySchedules.weekStartDate, weekStartDate),
-          eq(weeklySchedules.status, "approved")
-        )
-      );
-
-    return result.map((row) => ({
-      ...row.schedule,
-      weekStartDate: row.schedule.weekStartDate.toString(),
-      weekEndDate: row.schedule.weekEndDate.toString(),
-      user: row.user || undefined,
-    }));
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Failed to get schedules for week: ${error.message}`);
-    }
-    throw error;
-  }
-}
-
-/**
- * Get user's schedule for a specific date
- */
-export async function getUserScheduleForDate(userId: number, date: string) {
-  try {
-    const result = await db
-      .select()
-      .from(weeklySchedules)
-      .where(
-        and(
-          eq(weeklySchedules.userId, userId),
-          eq(weeklySchedules.status, "approved"),
-          lte(weeklySchedules.weekStartDate, date),
-          gte(weeklySchedules.weekEndDate, date)
-        )
+export async function getUserScheduleForWeek(
+  userId: number,
+  weekStartDate: string
+) {
+  const [schedule] = await db
+    .select()
+    .from(weeklySchedules)
+    .where(
+      and(
+        eq(weeklySchedules.userId, userId),
+        eq(weeklySchedules.weekStartDate, weekStartDate)
       )
-      .limit(1);
+    )
+    .limit(1);
 
-    if (result.length === 0) return null;
-
-    return {
-      ...result[0],
-      weekStartDate: result[0].weekStartDate.toString(),
-      weekEndDate: result[0].weekEndDate.toString(),
-    };
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Failed to get schedule for date: ${error.message}`);
-    }
-    throw error;
-  }
+  return schedule || null;
 }
 
 // ============================================================================
-// HISTORY
+// UPDATE
 // ============================================================================
 
 /**
- * Get schedule history
+ * Update schedule
  */
-export async function getScheduleHistory(scheduleId: number) {
-  try {
-    const result = await db
-      .select({
-        history: scheduleHistory,
-        changedBy: {
-          id: users.id,
-          fullName: users.fullName,
-          email: users.email,
-        },
-      })
-      .from(scheduleHistory)
-      .leftJoin(users, eq(scheduleHistory.changedBy, users.id))
-      .where(eq(scheduleHistory.scheduleId, scheduleId))
-      .orderBy(desc(scheduleHistory.changedAt));
-
-    return result.map((row) => ({
-      ...row.history,
-      changedBy: row.changedBy || undefined,
-    }));
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Failed to get schedule history: ${error.message}`);
-    }
-    throw error;
+export async function updateSchedule(
+  id: number,
+  input: UpdateScheduleInput,
+  updatedBy: number
+) {
+  // Get current schedule
+  const current = await getScheduleById(id);
+  if (!current) {
+    throw new Error("Schedule not found");
   }
+
+  // Check if approved schedule is being modified (only admin can modify)
+  if (current.status === "approved") {
+    throw new Error("Cannot modify approved schedule");
+  }
+
+  const updateData: any = {
+    updatedAt: new Date(),
+  };
+
+  if (input.scheduleData !== undefined) {
+    updateData.scheduleData = input.scheduleData;
+  }
+
+  if (input.status !== undefined) {
+    updateData.status = input.status;
+  }
+
+  const [schedule] = await db
+    .update(weeklySchedules)
+    .set(updateData)
+    .where(eq(weeklySchedules.id, id))
+    .returning();
+
+  // Create history entry
+  await createScheduleHistory({
+    scheduleId: id,
+    changeType: "modified",
+    oldData: current.scheduleData,
+    newData: input.scheduleData || current.scheduleData,
+    changedBy: updatedBy,
+  });
+
+  return schedule;
+}
+
+/**
+ * Approve schedule
+ */
+export async function approveSchedule(id: number, approvedBy: number) {
+  const [schedule] = await db
+    .update(weeklySchedules)
+    .set({
+      status: "approved",
+      approvedBy,
+      approvalDate: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(weeklySchedules.id, id))
+    .returning();
+
+  // Create history entry
+  await createScheduleHistory({
+    scheduleId: id,
+    changeType: "approved",
+    changedBy: approvedBy,
+  });
+
+  return schedule;
+}
+
+/**
+ * Reject schedule
+ */
+export async function rejectSchedule(
+  id: number,
+  rejectedBy: number,
+  reason: string
+) {
+  const [schedule] = await db
+    .update(weeklySchedules)
+    .set({
+      status: "rejected",
+      approvedBy: rejectedBy,
+      approvalDate: new Date(),
+      rejectionReason: reason,
+      updatedAt: new Date(),
+    })
+    .where(eq(weeklySchedules.id, id))
+    .returning();
+
+  // Create history entry
+  await createScheduleHistory({
+    scheduleId: id,
+    changeType: "rejected",
+    changedBy: rejectedBy,
+    reason,
+  });
+
+  return schedule;
 }
 
 // ============================================================================
@@ -472,31 +380,73 @@ export async function getScheduleHistory(scheduleId: number) {
 // ============================================================================
 
 /**
- * Delete a pending schedule (before approval)
+ * Delete schedule
  */
-export async function deletePendingSchedule(scheduleId: number) {
-  try {
-    const [deleted] = await db
-      .delete(weeklySchedules)
-      .where(
-        and(
-          eq(weeklySchedules.id, scheduleId),
-          eq(weeklySchedules.status, "pending_approval")
-        )
-      )
-      .returning();
-
-    if (!deleted) {
-      throw new Error("Schedule not found or not pending approval");
-    }
-
-    return deleted;
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Failed to delete schedule: ${error.message}`);
-    }
-    throw error;
+export async function deleteSchedule(id: number, deletedBy: number) {
+  // Get schedule before deleting
+  const schedule = await getScheduleById(id);
+  if (!schedule) {
+    throw new Error("Schedule not found");
   }
+
+  // Only allow deletion of pending schedules
+  if (schedule.status !== "pending_approval") {
+    throw new Error("Can only delete pending schedules");
+  }
+
+  // Create history entry before deletion
+  await createScheduleHistory({
+    scheduleId: id,
+    changeType: "deleted",
+    changedBy: deletedBy,
+  });
+
+  await db.delete(weeklySchedules).where(eq(weeklySchedules.id, id));
+}
+
+// ============================================================================
+// HISTORY
+// ============================================================================
+
+interface CreateHistoryInput {
+  scheduleId: number;
+  changeType: string;
+  oldData?: any;
+  newData?: any;
+  changedBy: number;
+  reason?: string;
+}
+
+async function createScheduleHistory(input: CreateHistoryInput) {
+  await db.insert(scheduleHistory).values({
+    scheduleId: input.scheduleId,
+    changeType: input.changeType,
+    oldData: input.oldData || null,
+    newData: input.newData || null,
+    changedBy: input.changedBy,
+    reason: input.reason || null,
+  });
+}
+
+/**
+ * Get schedule history
+ */
+export async function getScheduleHistory(scheduleId: number) {
+  return await db
+    .select({
+      id: scheduleHistory.id,
+      changeType: scheduleHistory.changeType,
+      oldData: scheduleHistory.oldData,
+      newData: scheduleHistory.newData,
+      changedBy: scheduleHistory.changedBy,
+      changedByName: users.fullName,
+      reason: scheduleHistory.reason,
+      changedAt: scheduleHistory.changedAt,
+    })
+    .from(scheduleHistory)
+    .innerJoin(users, eq(scheduleHistory.changedBy, users.id))
+    .where(eq(scheduleHistory.scheduleId, scheduleId))
+    .orderBy(desc(scheduleHistory.changedAt));
 }
 
 // ============================================================================
@@ -506,24 +456,20 @@ export async function deletePendingSchedule(scheduleId: number) {
 /**
  * Get schedule statistics
  */
-export async function getScheduleStatistics() {
-  try {
-    const result = await db
-      .select({
-        status: weeklySchedules.status,
-        count: sql<number>`cast(count(*) as integer)`,
-      })
-      .from(weeklySchedules)
-      .groupBy(weeklySchedules.status);
+export async function getScheduleStats() {
+  const [stats] = await db
+    .select({
+      total: sql<number>`count(*)`,
+      pending: sql<number>`count(*) filter (where ${weeklySchedules.status} = 'pending_approval')`,
+      approved: sql<number>`count(*) filter (where ${weeklySchedules.status} = 'approved')`,
+      rejected: sql<number>`count(*) filter (where ${weeklySchedules.status} = 'rejected')`,
+    })
+    .from(weeklySchedules);
 
-    return result.map((row) => ({
-      status: row.status,
-      count: Number(row.count),
-    }));
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Failed to get schedule statistics: ${error.message}`);
-    }
-    throw error;
-  }
+  return {
+    total: Number(stats?.total || 0),
+    pending: Number(stats?.pending || 0),
+    approved: Number(stats?.approved || 0),
+    rejected: Number(stats?.rejected || 0),
+  };
 }

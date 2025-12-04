@@ -8,6 +8,7 @@ import {
   integer,
   json,
   date,
+  unique,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -23,6 +24,103 @@ export const entryTypes = pgTable("entry_types", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 100 }).notNull().unique(),
   description: text("description"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ============================================================================
+// NEW: RBAC TABLES (Role-Based Access Control)
+// ============================================================================
+
+/**
+ * Roles - System roles (admin, team_leader, employee)
+ * Stored in database for flexibility
+ */
+export const roles = pgTable("roles", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 50 }).notNull().unique(),
+  displayName: varchar("display_name", { length: 100 }).notNull(),
+  description: text("description"),
+  hierarchy: integer("hierarchy").notNull(), // Higher = more power (1=employee, 2=team_leader, 3=admin)
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+/**
+ * Resources - System resources that can be protected
+ * e.g., 'users', 'teams', 'schedules', 'entries', 'evaluations', 'reports'
+ */
+export const resources = pgTable("resources", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 50 }).notNull().unique(),
+  displayName: varchar("display_name", { length: 100 }).notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+/**
+ * Actions - Operations that can be performed
+ * e.g., 'create', 'read', 'update', 'delete', 'approve', 'reject'
+ */
+export const actions = pgTable("actions", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 50 }).notNull().unique(),
+  displayName: varchar("display_name", { length: 100 }).notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+/**
+ * Permissions - Maps roles to resource actions
+ * Example: role=admin, resource=users, action=delete, scope=all
+ */
+export const permissions = pgTable(
+  "permissions",
+  {
+    id: serial("id").primaryKey(),
+    roleId: integer("role_id")
+      .references(() => roles.id, { onDelete: "cascade" })
+      .notNull(),
+    resourceId: integer("resource_id")
+      .references(() => resources.id, { onDelete: "cascade" })
+      .notNull(),
+    actionId: integer("action_id")
+      .references(() => actions.id, { onDelete: "cascade" })
+      .notNull(),
+    scope: varchar("scope", { length: 20 }).notNull(), // 'own', 'team', 'all'
+    conditions: json("conditions").$type<{
+      // Optional: Advanced conditions
+      teamId?: number;
+      departmentId?: number;
+      customRules?: Record<string, any>;
+    }>(),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    // Ensure unique permission combinations
+    unique("unique_role_resource_action").on(
+      table.roleId,
+      table.resourceId,
+      table.actionId,
+      table.scope
+    ),
+  ]
+);
+
+/**
+ * Audit Log - Track permission changes
+ */
+export const permissionAuditLog = pgTable("permission_audit_log", {
+  id: serial("id").primaryKey(),
+  permissionId: integer("permission_id").references(() => permissions.id),
+  action: varchar("action", { length: 20 }).notNull(), // 'created', 'updated', 'deleted'
+  changedBy: integer("changed_by")
+    .references(() => users.id)
+    .notNull(),
+  oldValue: json("old_value"),
+  newValue: json("new_value"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -48,7 +146,9 @@ export const users = pgTable("users", {
   fullName: varchar("full_name", { length: 200 }).notNull(),
   email: varchar("email", { length: 255 }).notNull().unique(),
   passwordHash: text("password_hash").notNull(),
-  role: varchar("role", { length: 50 }).notNull(),
+  roleId: integer("role_id")
+    .references(() => roles.id)
+    .notNull(), // Changed from varchar to integer
   teamId: integer("team_id").references(() => teams.id),
   isActive: boolean("is_active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -210,6 +310,39 @@ export const qualityEvaluations = pgTable("quality_evaluations", {
 // RELATIONS
 // ============================================================================
 
+// Roles Relations
+export const rolesRelations = relations(roles, ({ many }) => ({
+  users: many(users),
+  permissions: many(permissions),
+}));
+
+// Resources Relations
+export const resourcesRelations = relations(resources, ({ many }) => ({
+  permissions: many(permissions),
+}));
+
+// Actions Relations
+export const actionsRelations = relations(actions, ({ many }) => ({
+  permissions: many(permissions),
+}));
+
+// Permissions Relations
+export const permissionsRelations = relations(permissions, ({ one, many }) => ({
+  role: one(roles, {
+    fields: [permissions.roleId],
+    references: [roles.id],
+  }),
+  resource: one(resources, {
+    fields: [permissions.resourceId],
+    references: [resources.id],
+  }),
+  action: one(actions, {
+    fields: [permissions.actionId],
+    references: [actions.id],
+  }),
+  auditLogs: many(permissionAuditLog),
+}));
+
 // Teams Relations
 export const teamsRelations = relations(teams, ({ many }) => ({
   users: many(users),
@@ -217,6 +350,10 @@ export const teamsRelations = relations(teams, ({ many }) => ({
 
 // Users Relations
 export const usersRelations = relations(users, ({ one, many }) => ({
+  role: one(roles, {
+    fields: [users.roleId],
+    references: [roles.id],
+  }),
   team: one(teams, {
     fields: [users.teamId],
     references: [teams.id],
@@ -229,6 +366,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   scheduleHistoryChanges: many(scheduleHistory),
   entries: many(entries),
   evaluations: many(qualityEvaluations),
+  permissionAudits: many(permissionAuditLog),
 }));
 
 // Weekly Schedules Relations

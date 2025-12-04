@@ -1,43 +1,65 @@
+/**
+ * Entries Database Utilities
+ * CRUD operations for data entries
+ */
+
 import { db } from "../index";
-import { entries, users, entryTypes } from "../schema";
-import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
+import { entries, users, entryTypes, qualityEvaluations } from "../schema";
+import { eq, and, gte, lte, desc, asc, sql, between } from "drizzle-orm";
 
 // ============================================================================
-// TYPE DEFINITIONS
+// TYPES
 // ============================================================================
 
 export interface CreateEntryInput {
   employeeId: number;
   entryTypeId: number;
   productName: string;
-  productDescription?: string;
+  productDescription?: string | null;
   followsNamingConvention?: boolean;
   followsSpecificationOrder?: boolean;
   containsUnwantedKeywords?: boolean;
   entryTime?: Date;
 }
 
+export interface UpdateEntryInput {
+  productName?: string;
+  productDescription?: string | null;
+  followsNamingConvention?: boolean;
+  followsSpecificationOrder?: boolean;
+  containsUnwantedKeywords?: boolean;
+}
+
+export interface EntryFilters {
+  employeeId?: number;
+  teamId?: number;
+  entryTypeId?: number;
+  startDate?: string;
+  endDate?: string;
+  date?: string; // Specific date
+  hasEvaluation?: boolean;
+  page?: number;
+  pageSize?: number;
+  sortBy?: "entryTime" | "productName";
+  sortOrder?: "asc" | "desc";
+}
+
 export interface EntryWithDetails {
   id: number;
   employeeId: number;
+  employeeName: string;
+  employeeEmail: string;
+  teamId: number | null;
   entryTypeId: number;
+  entryTypeName: string;
   productName: string;
   productDescription: string | null;
   followsNamingConvention: boolean;
   followsSpecificationOrder: boolean;
   containsUnwantedKeywords: boolean;
   entryTime: Date;
-  employee?: {
-    id: number;
-    fullName: string;
-    email: string;
-    role: string;
-  };
-  entryType?: {
-    id: number;
-    name: string;
-    description: string | null;
-  };
+  hasEvaluation: boolean;
+  evaluationScore: number | null;
 }
 
 // ============================================================================
@@ -48,36 +70,9 @@ export interface EntryWithDetails {
  * Create a new entry
  */
 export async function createEntry(input: CreateEntryInput) {
-  try {
-    const [entry] = await db
-      .insert(entries)
-      .values({
-        employeeId: input.employeeId,
-        entryTypeId: input.entryTypeId,
-        productName: input.productName,
-        productDescription: input.productDescription || null,
-        followsNamingConvention: input.followsNamingConvention ?? true,
-        followsSpecificationOrder: input.followsSpecificationOrder ?? true,
-        containsUnwantedKeywords: input.containsUnwantedKeywords ?? false,
-        entryTime: input.entryTime || new Date(),
-      })
-      .returning();
-
-    return entry;
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Failed to create entry: ${error.message}`);
-    }
-    throw error;
-  }
-}
-
-/**
- * Bulk create entries
- */
-export async function bulkCreateEntries(inputs: CreateEntryInput[]) {
-  try {
-    const entriesToInsert = inputs.map((input) => ({
+  const [entry] = await db
+    .insert(entries)
+    .values({
       employeeId: input.employeeId,
       entryTypeId: input.entryTypeId,
       productName: input.productName,
@@ -86,420 +81,483 @@ export async function bulkCreateEntries(inputs: CreateEntryInput[]) {
       followsSpecificationOrder: input.followsSpecificationOrder ?? true,
       containsUnwantedKeywords: input.containsUnwantedKeywords ?? false,
       entryTime: input.entryTime || new Date(),
-    }));
+    })
+    .returning();
 
-    return await db.insert(entries).values(entriesToInsert).returning();
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Failed to bulk create entries: ${error.message}`);
-    }
-    throw error;
-  }
+  return entry;
+}
+
+/**
+ * Bulk create entries
+ */
+export async function bulkCreateEntries(inputs: CreateEntryInput[]) {
+  const entryValues = inputs.map((input) => ({
+    employeeId: input.employeeId,
+    entryTypeId: input.entryTypeId,
+    productName: input.productName,
+    productDescription: input.productDescription || null,
+    followsNamingConvention: input.followsNamingConvention ?? true,
+    followsSpecificationOrder: input.followsSpecificationOrder ?? true,
+    containsUnwantedKeywords: input.containsUnwantedKeywords ?? false,
+    entryTime: input.entryTime || new Date(),
+  }));
+
+  const createdEntries = await db
+    .insert(entries)
+    .values(entryValues)
+    .returning();
+
+  return createdEntries;
 }
 
 // ============================================================================
-// QUERY
+// READ
 // ============================================================================
 
 /**
- * Get entry by ID with full details
+ * Get entry by ID
  */
-export async function getEntryById(
-  entryId: number
-): Promise<EntryWithDetails | null> {
-  try {
-    const result = await db
-      .select({
-        entry: entries,
-        employee: {
-          id: users.id,
-          fullName: users.fullName,
-          email: users.email,
-          role: users.role,
-        },
-        entryType: {
-          id: entryTypes.id,
-          name: entryTypes.name,
-          description: entryTypes.description,
-        },
-      })
-      .from(entries)
-      .leftJoin(users, eq(entries.employeeId, users.id))
-      .leftJoin(entryTypes, eq(entries.entryTypeId, entryTypes.id))
-      .where(eq(entries.id, entryId))
-      .limit(1);
+export async function getEntryById(id: number) {
+  const [entry] = await db
+    .select({
+      id: entries.id,
+      employeeId: entries.employeeId,
+      employeeName: users.fullName,
+      employeeEmail: users.email,
+      teamId: users.teamId,
+      entryTypeId: entries.entryTypeId,
+      entryTypeName: entryTypes.name,
+      entryTypeDescription: entryTypes.description,
+      productName: entries.productName,
+      productDescription: entries.productDescription,
+      followsNamingConvention: entries.followsNamingConvention,
+      followsSpecificationOrder: entries.followsSpecificationOrder,
+      containsUnwantedKeywords: entries.containsUnwantedKeywords,
+      entryTime: entries.entryTime,
+    })
+    .from(entries)
+    .innerJoin(users, eq(entries.employeeId, users.id))
+    .innerJoin(entryTypes, eq(entries.entryTypeId, entryTypes.id))
+    .where(eq(entries.id, id))
+    .limit(1);
 
-    if (result.length === 0) return null;
-
-    const row = result[0];
-    return {
-      ...row.entry,
-      employee: row.employee || undefined,
-      entryType: row.entryType || undefined,
-    };
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Failed to get entry: ${error.message}`);
-    }
-    throw error;
-  }
+  return entry || null;
 }
 
 /**
- * Get entries with filters
+ * Get entries with filters and pagination
  */
-export async function getEntries(filters?: {
-  employeeId?: number;
-  entryTypeId?: number;
-  startDate?: Date;
-  endDate?: Date;
-  hasViolations?: boolean;
-  limit?: number;
-  offset?: number;
-}) {
-  try {
-    let query = db
-      .select({
-        entry: entries,
-        employee: {
-          id: users.id,
-          fullName: users.fullName,
-          email: users.email,
-          role: users.role,
-        },
-        entryType: {
-          id: entryTypes.id,
-          name: entryTypes.name,
-          description: entryTypes.description,
-        },
-      })
-      .from(entries)
-      .leftJoin(users, eq(entries.employeeId, users.id))
-      .leftJoin(entryTypes, eq(entries.entryTypeId, entryTypes.id))
-      .$dynamic();
+export async function getEntries(filters: EntryFilters = {}) {
+  const {
+    employeeId,
+    teamId,
+    entryTypeId,
+    startDate,
+    endDate,
+    date,
+    hasEvaluation,
+    page = 1,
+    pageSize = 20,
+    sortBy = "entryTime",
+    sortOrder = "desc",
+  } = filters;
 
-    const conditions = [];
+  // Build where conditions
+  const conditions = [];
 
-    if (filters?.employeeId) {
-      conditions.push(eq(entries.employeeId, filters.employeeId));
-    }
-
-    if (filters?.entryTypeId) {
-      conditions.push(eq(entries.entryTypeId, filters.entryTypeId));
-    }
-
-    if (filters?.startDate) {
-      conditions.push(gte(entries.entryTime, filters.startDate));
-    }
-
-    if (filters?.endDate) {
-      conditions.push(lte(entries.entryTime, filters.endDate));
-    }
-
-    if (filters?.hasViolations) {
-      conditions.push(
-        sql`(${entries.followsNamingConvention} = false OR ${entries.followsSpecificationOrder} = false OR ${entries.containsUnwantedKeywords} = true)`
-      );
-    }
-
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions));
-    }
-
-    query = query.orderBy(desc(entries.entryTime));
-
-    if (filters?.limit) {
-      query = query.limit(filters.limit);
-    }
-
-    if (filters?.offset) {
-      query = query.offset(filters.offset);
-    }
-
-    const result = await query;
-
-    return result.map((row) => ({
-      ...row.entry,
-      employee: row.employee || undefined,
-      entryType: row.entryType || undefined,
-    }));
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Failed to get entries: ${error.message}`);
-    }
-    throw error;
+  if (employeeId !== undefined) {
+    conditions.push(eq(entries.employeeId, employeeId));
   }
-}
 
-/**
- * Get entries by employee
- */
-export async function getEntriesByEmployee(
-  employeeId: number,
-  startDate?: Date,
-  endDate?: Date
-) {
-  try {
-    return await getEntries({ employeeId, startDate, endDate });
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Failed to get entries by employee: ${error.message}`);
-    }
-    throw error;
+  if (teamId !== undefined) {
+    conditions.push(eq(users.teamId, teamId));
   }
-}
 
-// ============================================================================
-// ANALYTICS
-// ============================================================================
-
-/**
- * Get entry count by employee
- */
-export async function getEntryCountByEmployee(
-  employeeId: number,
-  startDate?: Date,
-  endDate?: Date
-): Promise<number> {
-  try {
-    const conditions = [eq(entries.employeeId, employeeId)];
-
-    if (startDate) {
-      conditions.push(gte(entries.entryTime, startDate));
-    }
-
-    if (endDate) {
-      conditions.push(lte(entries.entryTime, endDate));
-    }
-
-    const result = await db
-      .select({ count: sql<number>`cast(count(*) as integer)` })
-      .from(entries)
-      .where(and(...conditions));
-
-    return Number(result[0]?.count || 0);
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Failed to get entry count: ${error.message}`);
-    }
-    throw error;
+  if (entryTypeId !== undefined) {
+    conditions.push(eq(entries.entryTypeId, entryTypeId));
   }
-}
 
-/**
- * Get hourly entry statistics for an employee
- */
-export async function getHourlyEntryStats(employeeId: number, date: Date) {
-  try {
+  if (date) {
+    // Specific date
     const startOfDay = new Date(date);
     startOfDay.setHours(0, 0, 0, 0);
-
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
+    conditions.push(between(entries.entryTime, startOfDay, endOfDay));
+  } else {
+    // Date range
+    if (startDate) {
+      conditions.push(gte(entries.entryTime, new Date(startDate)));
+    }
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      conditions.push(lte(entries.entryTime, end));
+    }
+  }
 
-    const result = await db
-      .select({
-        hour: sql<number>`EXTRACT(HOUR FROM ${entries.entryTime})`,
-        count: sql<number>`cast(count(*) as integer)`,
-        violations: sql<number>`cast(sum(case when ${entries.followsNamingConvention} = false OR ${entries.followsSpecificationOrder} = false OR ${entries.containsUnwantedKeywords} = true then 1 else 0 end) as integer)`,
-      })
-      .from(entries)
-      .where(
-        and(
-          eq(entries.employeeId, employeeId),
-          gte(entries.entryTime, startOfDay),
-          lte(entries.entryTime, endOfDay)
-        )
+  // Build sort
+  const sortColumn = {
+    entryTime: entries.entryTime,
+    productName: entries.productName,
+  }[sortBy];
+
+  const orderFn = sortOrder === "asc" ? asc : desc;
+
+  // Get total count
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(entries)
+    .innerJoin(users, eq(entries.employeeId, users.id))
+    .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+  // Get paginated entries
+  const entriesList = await db
+    .select({
+      id: entries.id,
+      employeeId: entries.employeeId,
+      employeeName: users.fullName,
+      employeeEmail: users.email,
+      teamId: users.teamId,
+      entryTypeId: entries.entryTypeId,
+      entryTypeName: entryTypes.name,
+      productName: entries.productName,
+      productDescription: entries.productDescription,
+      followsNamingConvention: entries.followsNamingConvention,
+      followsSpecificationOrder: entries.followsSpecificationOrder,
+      containsUnwantedKeywords: entries.containsUnwantedKeywords,
+      entryTime: entries.entryTime,
+      evaluationId: qualityEvaluations.id,
+      evaluationScore: qualityEvaluations.totalScore,
+    })
+    .from(entries)
+    .innerJoin(users, eq(entries.employeeId, users.id))
+    .innerJoin(entryTypes, eq(entries.entryTypeId, entryTypes.id))
+    .leftJoin(qualityEvaluations, eq(entries.id, qualityEvaluations.entryId))
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(orderFn(sortColumn))
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
+
+  // Filter by evaluation status if needed
+  let filteredList = entriesList;
+  if (hasEvaluation !== undefined) {
+    filteredList = entriesList.filter((entry) =>
+      hasEvaluation ? entry.evaluationId !== null : entry.evaluationId === null
+    );
+  }
+
+  return {
+    data: filteredList.map((entry) => ({
+      ...entry,
+      hasEvaluation: entry.evaluationId !== null,
+    })),
+    pagination: {
+      page,
+      pageSize,
+      total: Number(count),
+      totalPages: Math.ceil(Number(count) / pageSize),
+    },
+  };
+}
+
+/**
+ * Get entries by employee for a specific date
+ */
+export async function getEmployeeEntriesForDate(
+  employeeId: number,
+  date: string
+) {
+  const startOfDay = new Date(date);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(date);
+  endOfDay.setHours(23, 59, 59, 999);
+
+  return await db
+    .select({
+      id: entries.id,
+      entryTypeId: entries.entryTypeId,
+      entryTypeName: entryTypes.name,
+      productName: entries.productName,
+      productDescription: entries.productDescription,
+      entryTime: entries.entryTime,
+      hasEvaluation: sql<boolean>`${qualityEvaluations.id} IS NOT NULL`,
+    })
+    .from(entries)
+    .innerJoin(entryTypes, eq(entries.entryTypeId, entryTypes.id))
+    .leftJoin(qualityEvaluations, eq(entries.id, qualityEvaluations.entryId))
+    .where(
+      and(
+        eq(entries.employeeId, employeeId),
+        between(entries.entryTime, startOfDay, endOfDay)
       )
-      .groupBy(sql`EXTRACT(HOUR FROM ${entries.entryTime})`)
-      .orderBy(sql`EXTRACT(HOUR FROM ${entries.entryTime})`);
-
-    return result.map((row) => ({
-      hour: Number(row.hour),
-      count: Number(row.count),
-      violations: Number(row.violations),
-    }));
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Failed to get hourly entry stats: ${error.message}`);
-    }
-    throw error;
-  }
+    )
+    .orderBy(desc(entries.entryTime));
 }
 
 /**
- * Get entry type distribution for an employee
+ * Get unevaluated entries
  */
-export async function getEntryTypeDistribution(
-  employeeId: number,
-  startDate?: Date,
-  endDate?: Date
-) {
-  try {
-    const conditions = [eq(entries.employeeId, employeeId)];
+export async function getUnevaluatedEntries(filters: {
+  employeeId?: number;
+  teamId?: number;
+  limit?: number;
+}) {
+  const { employeeId, teamId, limit = 50 } = filters;
 
-    if (startDate) {
-      conditions.push(gte(entries.entryTime, startDate));
-    }
+  const conditions = [sql`${qualityEvaluations.id} IS NULL`];
 
-    if (endDate) {
-      conditions.push(lte(entries.entryTime, endDate));
-    }
-
-    const result = await db
-      .select({
-        entryTypeId: entries.entryTypeId,
-        entryTypeName: entryTypes.name,
-        count: sql<number>`cast(count(*) as integer)`,
-      })
-      .from(entries)
-      .leftJoin(entryTypes, eq(entries.entryTypeId, entryTypes.id))
-      .where(and(...conditions))
-      .groupBy(entries.entryTypeId, entryTypes.name)
-      .orderBy(desc(sql`count(*)`));
-
-    return result.map((row) => ({
-      entryTypeId: row.entryTypeId,
-      entryTypeName: row.entryTypeName,
-      count: Number(row.count),
-    }));
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(
-        `Failed to get entry type distribution: ${error.message}`
-      );
-    }
-    throw error;
+  if (employeeId) {
+    conditions.push(eq(entries.employeeId, employeeId));
   }
+
+  if (teamId) {
+    conditions.push(eq(users.teamId, teamId));
+  }
+
+  return await db
+    .select({
+      id: entries.id,
+      employeeId: entries.employeeId,
+      employeeName: users.fullName,
+      teamId: users.teamId,
+      entryTypeId: entries.entryTypeId,
+      entryTypeName: entryTypes.name,
+      productName: entries.productName,
+      entryTime: entries.entryTime,
+    })
+    .from(entries)
+    .innerJoin(users, eq(entries.employeeId, users.id))
+    .innerJoin(entryTypes, eq(entries.entryTypeId, entryTypes.id))
+    .leftJoin(qualityEvaluations, eq(entries.id, qualityEvaluations.entryId))
+    .where(and(...conditions))
+    .orderBy(asc(entries.entryTime))
+    .limit(limit);
+}
+
+// ============================================================================
+// UPDATE
+// ============================================================================
+
+/**
+ * Update entry by ID
+ */
+export async function updateEntry(id: number, input: UpdateEntryInput) {
+  const updateData: any = {};
+
+  if (input.productName !== undefined) {
+    updateData.productName = input.productName;
+  }
+
+  if (input.productDescription !== undefined) {
+    updateData.productDescription = input.productDescription;
+  }
+
+  if (input.followsNamingConvention !== undefined) {
+    updateData.followsNamingConvention = input.followsNamingConvention;
+  }
+
+  if (input.followsSpecificationOrder !== undefined) {
+    updateData.followsSpecificationOrder = input.followsSpecificationOrder;
+  }
+
+  if (input.containsUnwantedKeywords !== undefined) {
+    updateData.containsUnwantedKeywords = input.containsUnwantedKeywords;
+  }
+
+  const [entry] = await db
+    .update(entries)
+    .set(updateData)
+    .where(eq(entries.id, id))
+    .returning();
+
+  return entry;
+}
+
+// ============================================================================
+// DELETE
+// ============================================================================
+
+/**
+ * Delete entry by ID
+ * Note: This will also delete associated evaluations (cascade)
+ */
+export async function deleteEntry(id: number) {
+  await db.delete(entries).where(eq(entries.id, id));
 }
 
 /**
- * Get violation statistics
+ * Bulk delete entries
  */
-export async function getViolationStats(
-  employeeId?: number,
-  startDate?: Date,
-  endDate?: Date
-) {
-  try {
-    const conditions = [];
-
-    if (employeeId) {
-      conditions.push(eq(entries.employeeId, employeeId));
-    }
-
-    if (startDate) {
-      conditions.push(gte(entries.entryTime, startDate));
-    }
-
-    if (endDate) {
-      conditions.push(lte(entries.entryTime, endDate));
-    }
-
-    const result = await db
-      .select({
-        totalEntries: sql<number>`cast(count(*) as integer)`,
-        namingViolations: sql<number>`cast(sum(case when ${entries.followsNamingConvention} = false then 1 else 0 end) as integer)`,
-        specViolations: sql<number>`cast(sum(case when ${entries.followsSpecificationOrder} = false then 1 else 0 end) as integer)`,
-        keywordViolations: sql<number>`cast(sum(case when ${entries.containsUnwantedKeywords} = true then 1 else 0 end) as integer)`,
-      })
-      .from(entries)
-      .where(conditions.length > 0 ? and(...conditions) : undefined);
-
-    const row = result[0];
-    return {
-      totalEntries: Number(row.totalEntries || 0),
-      namingViolations: Number(row.namingViolations || 0),
-      specViolations: Number(row.specViolations || 0),
-      keywordViolations: Number(row.keywordViolations || 0),
-    };
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Failed to get violation stats: ${error.message}`);
-    }
-    throw error;
-  }
-}
-
-/**
- * Get average time between entries (in minutes)
- */
-export async function getAverageTimeBetweenEntries(
-  employeeId: number,
-  startDate?: Date,
-  endDate?: Date
-): Promise<number> {
-  try {
-    const conditions = [eq(entries.employeeId, employeeId)];
-
-    if (startDate) {
-      conditions.push(gte(entries.entryTime, startDate));
-    }
-
-    if (endDate) {
-      conditions.push(lte(entries.entryTime, endDate));
-    }
-
-    const result = await db
-      .select({
-        avgDiff: sql<number>`AVG(EXTRACT(EPOCH FROM (entry_time - LAG(entry_time) OVER (ORDER BY entry_time))) / 60)`,
-      })
-      .from(entries)
-      .where(and(...conditions));
-
-    return Number(result[0]?.avgDiff || 0);
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(
-        `Failed to get average time between entries: ${error.message}`
-      );
-    }
-    throw error;
+export async function bulkDeleteEntries(ids: number[]) {
+  for (const id of ids) {
+    await deleteEntry(id);
   }
 }
 
 // ============================================================================
-// UPDATE & DELETE
+// STATISTICS
 // ============================================================================
 
 /**
- * Update entry
+ * Get entry statistics
  */
-export async function updateEntry(
-  entryId: number,
-  updates: Partial<CreateEntryInput>
-) {
-  try {
-    const [updated] = await db
-      .update(entries)
-      .set(updates)
-      .where(eq(entries.id, entryId))
-      .returning();
+export async function getEntryStats(filters?: {
+  employeeId?: number;
+  teamId?: number;
+  startDate?: string;
+  endDate?: string;
+}) {
+  const conditions = [];
 
-    return updated;
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Failed to update entry: ${error.message}`);
-    }
-    throw error;
+  if (filters?.employeeId) {
+    conditions.push(eq(entries.employeeId, filters.employeeId));
   }
+
+  if (filters?.teamId) {
+    conditions.push(eq(users.teamId, filters.teamId));
+  }
+
+  if (filters?.startDate) {
+    conditions.push(gte(entries.entryTime, new Date(filters.startDate)));
+  }
+
+  if (filters?.endDate) {
+    const end = new Date(filters.endDate);
+    end.setHours(23, 59, 59, 999);
+    conditions.push(lte(entries.entryTime, end));
+  }
+
+  const [stats] = await db
+    .select({
+      total: sql<number>`count(*)`,
+      evaluated: sql<number>`count(${qualityEvaluations.id})`,
+      unevaluated: sql<number>`count(*) - count(${qualityEvaluations.id})`,
+      avgNamingConvention: sql<number>`avg(case when ${entries.followsNamingConvention} then 1 else 0 end)`,
+      avgSpecificationOrder: sql<number>`avg(case when ${entries.followsSpecificationOrder} then 1 else 0 end)`,
+      avgUnwantedKeywords: sql<number>`avg(case when ${entries.containsUnwantedKeywords} then 1 else 0 end)`,
+    })
+    .from(entries)
+    .innerJoin(users, eq(entries.employeeId, users.id))
+    .leftJoin(qualityEvaluations, eq(entries.id, qualityEvaluations.entryId))
+    .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+  return {
+    total: Number(stats?.total || 0),
+    evaluated: Number(stats?.evaluated || 0),
+    unevaluated: Number(stats?.unevaluated || 0),
+    namingConventionRate: Math.round(
+      Number(stats?.avgNamingConvention || 0) * 100
+    ),
+    specificationOrderRate: Math.round(
+      Number(stats?.avgSpecificationOrder || 0) * 100
+    ),
+    unwantedKeywordsRate: Math.round(
+      Number(stats?.avgUnwantedKeywords || 0) * 100
+    ),
+  };
 }
 
 /**
- * Delete entry
+ * Get daily entry count for a date range
  */
-export async function deleteEntry(entryId: number) {
-  try {
-    const [deleted] = await db
-      .delete(entries)
-      .where(eq(entries.id, entryId))
-      .returning();
+export async function getDailyEntryCounts(
+  startDate: string,
+  endDate: string,
+  filters?: { employeeId?: number; teamId?: number }
+) {
+  const conditions = [
+    gte(entries.entryTime, new Date(startDate)),
+    lte(entries.entryTime, new Date(endDate)),
+  ];
 
-    return deleted;
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new Error(`Failed to delete entry: ${error.message}`);
-    }
-    throw error;
+  if (filters?.employeeId) {
+    conditions.push(eq(entries.employeeId, filters.employeeId));
   }
+
+  if (filters?.teamId) {
+    conditions.push(eq(users.teamId, filters.teamId));
+  }
+
+  return await db
+    .select({
+      date: sql<string>`DATE(${entries.entryTime})`,
+      count: sql<number>`count(*)`,
+    })
+    .from(entries)
+    .innerJoin(users, eq(entries.employeeId, users.id))
+    .where(and(...conditions))
+    .groupBy(sql`DATE(${entries.entryTime})`)
+    .orderBy(sql`DATE(${entries.entryTime})`);
+}
+
+/**
+ * Get entry count by type
+ */
+export async function getEntryCountByType(filters?: {
+  startDate?: string;
+  endDate?: string;
+}) {
+  const conditions = [];
+
+  if (filters?.startDate) {
+    conditions.push(gte(entries.entryTime, new Date(filters.startDate)));
+  }
+
+  if (filters?.endDate) {
+    const end = new Date(filters.endDate);
+    end.setHours(23, 59, 59, 999);
+    conditions.push(lte(entries.entryTime, end));
+  }
+
+  return await db
+    .select({
+      entryTypeId: entries.entryTypeId,
+      entryTypeName: entryTypes.name,
+      count: sql<number>`count(*)`,
+    })
+    .from(entries)
+    .innerJoin(entryTypes, eq(entries.entryTypeId, entryTypes.id))
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .groupBy(entries.entryTypeId, entryTypes.name)
+    .orderBy(desc(sql`count(*)`));
+}
+
+/**
+ * Get top performers by entry count
+ */
+export async function getTopPerformersByEntryCount(
+  limit: number = 10,
+  filters?: { startDate?: string; endDate?: string; teamId?: number }
+) {
+  const conditions = [];
+
+  if (filters?.startDate) {
+    conditions.push(gte(entries.entryTime, new Date(filters.startDate)));
+  }
+
+  if (filters?.endDate) {
+    const end = new Date(filters.endDate);
+    end.setHours(23, 59, 59, 999);
+    conditions.push(lte(entries.entryTime, end));
+  }
+
+  if (filters?.teamId) {
+    conditions.push(eq(users.teamId, filters.teamId));
+  }
+
+  return await db
+    .select({
+      employeeId: entries.employeeId,
+      employeeName: users.fullName,
+      employeeEmail: users.email,
+      teamId: users.teamId,
+      entryCount: sql<number>`count(*)`,
+    })
+    .from(entries)
+    .innerJoin(users, eq(entries.employeeId, users.id))
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .groupBy(entries.employeeId, users.fullName, users.email, users.teamId)
+    .orderBy(desc(sql`count(*)`))
+    .limit(limit);
 }
