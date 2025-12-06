@@ -8,7 +8,6 @@
 import { db } from "./index";
 import { users, teams, roles, entryTypes } from "./schema";
 import { hash } from "argon2";
-import { eq } from "drizzle-orm";
 
 async function seed() {
   console.log("🌱 Seeding database...");
@@ -108,7 +107,6 @@ async function seed() {
 
     // Hash passwords
     const adminPassword = await hash("Elryan@12345");
-    const demoPassword = await hash("Demo@12345");
 
     // Admin user
     const [admin] = await db
@@ -130,132 +128,6 @@ async function seed() {
       .returning();
 
     console.log("✅ Admin user created:", admin.email);
-
-    // Team Leader for Team Alpha
-    const [teamLeaderA] = await db
-      .insert(users)
-      .values({
-        fullName: "Sarah Johnson",
-        email: "sarah.johnson@elryan.com",
-        passwordHash: demoPassword,
-        roleId: teamLeaderRole.id,
-        teamId: teamA?.id,
-        isActive: true,
-      })
-      .onConflictDoUpdate({
-        target: users.email,
-        set: {
-          passwordHash: demoPassword,
-          roleId: teamLeaderRole.id,
-          teamId: teamA?.id,
-        },
-      })
-      .returning();
-
-    console.log("✅ Team Leader A created:", teamLeaderA.email);
-
-    // Team Leader for Team Beta
-    const [teamLeaderB] = await db
-      .insert(users)
-      .values({
-        fullName: "Michael Chen",
-        email: "michael.chen@elryan.com",
-        passwordHash: demoPassword,
-        roleId: teamLeaderRole.id,
-        teamId: teamB?.id,
-        isActive: true,
-      })
-      .onConflictDoUpdate({
-        target: users.email,
-        set: {
-          passwordHash: demoPassword,
-          roleId: teamLeaderRole.id,
-          teamId: teamB?.id,
-        },
-      })
-      .returning();
-
-    console.log("✅ Team Leader B created:", teamLeaderB.email);
-
-    // Employees for Team Alpha
-    const employeesA = [
-      { fullName: "John Smith", email: "john.smith@elryan.com" },
-      { fullName: "Emily Davis", email: "emily.davis@elryan.com" },
-      { fullName: "David Wilson", email: "david.wilson@elryan.com" },
-    ];
-
-    for (const emp of employeesA) {
-      await db
-        .insert(users)
-        .values({
-          fullName: emp.fullName,
-          email: emp.email,
-          passwordHash: demoPassword,
-          roleId: employeeRole.id,
-          teamId: teamA?.id,
-          isActive: true,
-        })
-        .onConflictDoUpdate({
-          target: users.email,
-          set: {
-            passwordHash: demoPassword,
-            roleId: employeeRole.id,
-            teamId: teamA?.id,
-          },
-        });
-      console.log("✅ Employee created:", emp.email);
-    }
-
-    // Employees for Team Beta
-    const employeesB = [
-      { fullName: "Lisa Anderson", email: "lisa.anderson@elryan.com" },
-      { fullName: "Robert Martinez", email: "robert.martinez@elryan.com" },
-      { fullName: "Jennifer Taylor", email: "jennifer.taylor@elryan.com" },
-    ];
-
-    for (const emp of employeesB) {
-      await db
-        .insert(users)
-        .values({
-          fullName: emp.fullName,
-          email: emp.email,
-          passwordHash: demoPassword,
-          roleId: employeeRole.id,
-          teamId: teamB?.id,
-          isActive: true,
-        })
-        .onConflictDoUpdate({
-          target: users.email,
-          set: {
-            passwordHash: demoPassword,
-            roleId: employeeRole.id,
-            teamId: teamB?.id,
-          },
-        });
-      console.log("✅ Employee created:", emp.email);
-    }
-
-    console.log("");
-    console.log("🎉 Database seeding complete!");
-    console.log("");
-    console.log("📊 Summary:");
-    console.log("  - Entry Types: 4");
-    console.log("  - Teams: 2");
-    console.log("  - Users: 9 (1 admin, 2 team leaders, 6 employees)");
-    console.log("");
-    console.log("🔐 Login Credentials:");
-    console.log("  Admin:");
-    console.log("    Email: mustafa.ahmed@elryan.com");
-    console.log("    Password: Elryan@12345");
-    console.log("");
-    console.log("  Team Leader A:");
-    console.log("    Email: sarah.johnson@elryan.com");
-    console.log("    Password: Demo@12345");
-    console.log("");
-    console.log("  Employee (Team A):");
-    console.log("    Email: john.smith@elryan.com");
-    console.log("    Password: Demo@12345");
-    console.log("");
   } catch (error) {
     console.error("❌ Error seeding database:", error);
     throw error;
