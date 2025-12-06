@@ -1,21 +1,16 @@
 /**
  * Evaluations API Routes
- * GET /api/evaluations - List evaluations
+ * GET /api/evaluations - List evaluations with filters
  * POST /api/evaluations - Create evaluation
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
-import { checkPermission, getUserPermissions } from "@/db/utils/permissions";
-import {
-  getEvaluations,
-  createEvaluation,
-  bulkCreateEvaluations,
-  getEvaluationStats,
-} from "@/db/utils/evaluations";
+import { checkPermission } from "@/db/utils/permissions";
+import { getEvaluations, createEvaluation } from "@/db/utils/evaluations";
 
-// GET /api/evaluations - List evaluations
+// GET /api/evaluations - List evaluations with filters
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -33,75 +28,45 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Get user permissions
-    const userPerms = await getUserPermissions(session.user.id);
-    if (!userPerms) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     // Get query parameters
     const searchParams = request.nextUrl.searchParams;
-    const employeeId = searchParams.get("employeeId");
-    const evaluatorId = searchParams.get("evaluatorId");
-    const teamId = searchParams.get("teamId");
-    const minScore = searchParams.get("minScore");
-    const maxScore = searchParams.get("maxScore");
-    const startDate = searchParams.get("startDate") || undefined;
-    const endDate = searchParams.get("endDate") || undefined;
-    const page = parseInt(searchParams.get("page") || "1");
-    const pageSize = parseInt(searchParams.get("pageSize") || "20");
-    const includeStats = searchParams.get("stats") === "true";
-
-    // Build filters based on permission scope
-    const filters: any = {
-      page,
-      pageSize,
-      startDate,
-      endDate,
+    const filters = {
+      entryId: searchParams.get("entryId")
+        ? parseInt(searchParams.get("entryId")!)
+        : undefined,
+      employeeId: searchParams.get("employeeId")
+        ? parseInt(searchParams.get("employeeId")!)
+        : undefined,
+      evaluatorId: searchParams.get("evaluatorId")
+        ? parseInt(searchParams.get("evaluatorId")!)
+        : undefined,
+      teamId: searchParams.get("teamId")
+        ? parseInt(searchParams.get("teamId")!)
+        : undefined,
+      ruleSetId: searchParams.get("ruleSetId")
+        ? parseInt(searchParams.get("ruleSetId")!)
+        : undefined,
+      minScore: searchParams.get("minScore")
+        ? parseInt(searchParams.get("minScore")!)
+        : undefined,
+      maxScore: searchParams.get("maxScore")
+        ? parseInt(searchParams.get("maxScore")!)
+        : undefined,
+      startDate: searchParams.get("startDate") || undefined,
+      endDate: searchParams.get("endDate") || undefined,
+      page: parseInt(searchParams.get("page") || "1"),
+      pageSize: parseInt(searchParams.get("pageSize") || "20"),
+      sortBy:
+        (searchParams.get("sortBy") as "evaluatedAt" | "totalScore") ||
+        "evaluatedAt",
+      sortOrder: (searchParams.get("sortOrder") as "asc" | "desc") || "desc",
     };
 
-    if (minScore) filters.minScore = parseInt(minScore);
-    if (maxScore) filters.maxScore = parseInt(maxScore);
-    if (evaluatorId) filters.evaluatorId = parseInt(evaluatorId);
-
-    const readPermission = userPerms.permissions.find(
-      (p) => p.resource === "evaluations" && p.action === "read"
-    );
-
-    if (readPermission?.scope === "own") {
-      // Employee: only their own evaluations
-      filters.employeeId = session.user.id;
-    } else if (readPermission?.scope === "team") {
-      // Team leader: their team's evaluations
-      if (userPerms.teamId) {
-        filters.teamId = userPerms.teamId;
-      }
-      if (employeeId) {
-        filters.employeeId = parseInt(employeeId);
-      }
-    } else if (readPermission?.scope === "all") {
-      // Admin: all evaluations
-      if (employeeId) filters.employeeId = parseInt(employeeId);
-      if (teamId) filters.teamId = parseInt(teamId);
-    }
-
     const result = await getEvaluations(filters);
-
-    // Get stats if requested
-    let stats;
-    if (includeStats) {
-      stats = await getEvaluationStats({
-        employeeId: filters.employeeId,
-        teamId: filters.teamId,
-        startDate,
-        endDate,
-      });
-    }
 
     return NextResponse.json({
       success: true,
       ...result,
-      stats,
     });
   } catch (error) {
     console.error("Error fetching evaluations:", error);
@@ -132,29 +97,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
-    // Check if bulk create
-    if (Array.isArray(body)) {
-      // Bulk create evaluations
-      const result = await bulkCreateEvaluations(
-        body.map((item) => ({
-          entryId: item.entryId,
-          evaluatorId: session.user.id,
-          ruleSetId: item.ruleSetId,
-          totalScore: item.totalScore,
-          violations: item.violations || [],
-          comments: item.comments,
-        }))
-      );
-
-      return NextResponse.json({
-        success: true,
-        data: result.created,
-        skipped: result.skipped,
-        message: `${result.created.length} evaluations created, ${result.skipped} skipped`,
-      });
-    }
-
-    // Single evaluation create
+    // Validate required fields
     if (
       !body.entryId ||
       !body.ruleSetId ||
@@ -167,13 +110,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate score range
+    if (body.totalScore < 0 || body.totalScore > 100) {
+      return NextResponse.json(
+        { error: "Score must be between 0 and 100" },
+        { status: 400 }
+      );
+    }
+
+    // Validate violations array
+    if (!Array.isArray(body.violations)) {
+      return NextResponse.json(
+        { error: "Violations must be an array" },
+        { status: 400 }
+      );
+    }
+
+    // Create evaluation
     const evaluation = await createEvaluation({
       entryId: body.entryId,
       evaluatorId: session.user.id,
       ruleSetId: body.ruleSetId,
       totalScore: body.totalScore,
       violations: body.violations,
-      comments: body.comments,
+      comments: body.comments || null,
     });
 
     return NextResponse.json({

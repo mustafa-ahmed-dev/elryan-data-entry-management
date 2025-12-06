@@ -6,15 +6,16 @@
 
 "use client";
 
-import { Table, Tag, Space, Button, Popconfirm, Tooltip } from "antd";
+import { Table, Space, Button, Tag, Tooltip, Popconfirm, Badge } from "antd";
 import {
   EditOutlined,
   DeleteOutlined,
+  UserOutlined,
   CheckCircleOutlined,
   StopOutlined,
 } from "@ant-design/icons";
 import type { ColumnsType, TablePaginationConfig } from "antd/es/table";
-import { ROLE_LABELS } from "@/lib/constants/roles";
+import dayjs from "dayjs";
 
 interface User {
   id: number;
@@ -36,8 +37,6 @@ interface UserTableProps {
   onEdit: (user: User) => void;
   onDelete: (userId: number) => void;
   onChange: (page: number, pageSize: number) => void;
-  canEdit: boolean;
-  canDelete: boolean;
 }
 
 export function UserTable({
@@ -47,19 +46,34 @@ export function UserTable({
   onEdit,
   onDelete,
   onChange,
-  canEdit,
-  canDelete,
 }: UserTableProps) {
+  const getRoleColor = (roleName: string) => {
+    switch (roleName) {
+      case "admin":
+        return "red";
+      case "team_leader":
+        return "blue";
+      case "employee":
+        return "green";
+      default:
+        return "default";
+    }
+  };
+
   const columns: ColumnsType<User> = [
     {
       title: "Name",
       dataIndex: "fullName",
       key: "fullName",
-      sorter: true,
       render: (text, record) => (
         <div>
-          <div style={{ fontWeight: 500 }}>{text}</div>
-          <div style={{ fontSize: "12px", color: "#666" }}>{record.email}</div>
+          <div style={{ fontWeight: 500, fontSize: "14px" }}>
+            <UserOutlined style={{ marginRight: "8px", color: "#1890ff" }} />
+            {text}
+          </div>
+          <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+            {record.email}
+          </div>
         </div>
       ),
     },
@@ -68,64 +82,78 @@ export function UserTable({
       dataIndex: "roleDisplayName",
       key: "role",
       width: 150,
-      render: (text, record) => {
-        const colors: Record<string, string> = {
-          admin: "red",
-          team_leader: "blue",
-          employee: "green",
-        };
-        return <Tag color={colors[record.roleName] || "default"}>{text}</Tag>;
-      },
+      render: (text, record) => (
+        <Tag color={getRoleColor(record.roleName)}>{text}</Tag>
+      ),
     },
     {
       title: "Team",
       dataIndex: "teamName",
       key: "team",
       width: 150,
-      render: (text) => text || <span style={{ color: "#999" }}>No team</span>,
+      render: (teamName) =>
+        teamName ? (
+          <Tag color="purple">{teamName}</Tag>
+        ) : (
+          <span style={{ color: "#999" }}>No Team</span>
+        ),
     },
     {
       title: "Status",
       dataIndex: "isActive",
-      key: "status",
-      width: 100,
-      render: (isActive) => (
-        <Tag
-          icon={isActive ? <CheckCircleOutlined /> : <StopOutlined />}
-          color={isActive ? "success" : "error"}
-        >
-          {isActive ? "Active" : "Inactive"}
-        </Tag>
-      ),
+      key: "isActive",
+      width: 120,
+      align: "center",
+      render: (isActive) =>
+        isActive ? (
+          <Badge
+            status="success"
+            text="Active"
+            icon={<CheckCircleOutlined />}
+          />
+        ) : (
+          <Badge status="default" text="Inactive" icon={<StopOutlined />} />
+        ),
+    },
+    {
+      title: "Created",
+      dataIndex: "createdAt",
+      key: "createdAt",
+      width: 150,
+      render: (date) => dayjs(date).format("MMM D, YYYY"),
     },
     {
       title: "Actions",
       key: "actions",
-      width: 150,
+      width: 120,
+      fixed: "right",
       render: (_, record) => (
         <Space size="small">
-          {canEdit && (
-            <Tooltip title="Edit user">
-              <Button
-                type="text"
-                icon={<EditOutlined />}
-                onClick={() => onEdit(record)}
-              />
+          <Tooltip title="Edit user">
+            <Button
+              type="text"
+              icon={<EditOutlined />}
+              onClick={() => onEdit(record)}
+            />
+          </Tooltip>
+          <Popconfirm
+            title="Delete user"
+            description={
+              <>
+                <p>Are you sure you want to deactivate this user?</p>
+                <p style={{ color: "#999", fontSize: "12px" }}>
+                  The user will be set to inactive and unable to login.
+                </p>
+              </>
+            }
+            onConfirm={() => onDelete(record.id)}
+            okText="Deactivate"
+            okType="danger"
+          >
+            <Tooltip title="Deactivate user">
+              <Button type="text" danger icon={<DeleteOutlined />} />
             </Tooltip>
-          )}
-          {canDelete && (
-            <Popconfirm
-              title="Delete user"
-              description="Are you sure you want to delete this user?"
-              onConfirm={() => onDelete(record.id)}
-              okText="Yes"
-              cancelText="No"
-            >
-              <Tooltip title="Delete user">
-                <Button type="text" danger icon={<DeleteOutlined />} />
-              </Tooltip>
-            </Popconfirm>
-          )}
+          </Popconfirm>
         </Space>
       ),
     },
@@ -136,12 +164,14 @@ export function UserTable({
       columns={columns}
       dataSource={users}
       loading={loading}
-      rowKey="id"
       pagination={{
         ...pagination,
+        showSizeChanger: true,
+        showTotal: (total) => `Total ${total} users`,
         onChange: onChange,
       }}
-      scroll={{ x: 800 }}
+      rowKey="id"
+      scroll={{ x: 1000 }}
     />
   );
 }

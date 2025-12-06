@@ -9,9 +9,8 @@ import {
   entries,
   users,
   evaluationRuleSets,
-  evaluationRules,
 } from "../schema";
-import { eq, and, gte, lte, desc, asc, sql, inArray } from "drizzle-orm";
+import { eq, and, gte, lte, desc, asc, sql } from "drizzle-orm";
 
 // ============================================================================
 // TYPES
@@ -62,17 +61,6 @@ export interface EvaluationFilters {
  * Create a new evaluation
  */
 export async function createEvaluation(input: CreateEvaluationInput) {
-  // Check if entry already has an evaluation
-  const existing = await db
-    .select()
-    .from(qualityEvaluations)
-    .where(eq(qualityEvaluations.entryId, input.entryId))
-    .limit(1);
-
-  if (existing.length > 0) {
-    throw new Error("Entry already has an evaluation");
-  }
-
   const [evaluation] = await db
     .insert(qualityEvaluations)
     .values({
@@ -89,41 +77,24 @@ export async function createEvaluation(input: CreateEvaluationInput) {
 }
 
 /**
- * Bulk create evaluations
+ * Create multiple evaluations at once (bulk)
  */
-export async function bulkCreateEvaluations(inputs: CreateEvaluationInput[]) {
-  // Check for existing evaluations
-  const entryIds = inputs.map((i) => i.entryId);
-  const existing = await db
-    .select({ entryId: qualityEvaluations.entryId })
-    .from(qualityEvaluations)
-    .where(inArray(qualityEvaluations.entryId, entryIds));
-
-  const existingIds = new Set(existing.map((e) => e.entryId));
-  const newEvaluations = inputs.filter((i) => !existingIds.has(i.entryId));
-
-  if (newEvaluations.length === 0) {
-    throw new Error("All entries already have evaluations");
-  }
-
-  const evaluationValues = newEvaluations.map((input) => ({
-    entryId: input.entryId,
-    evaluatorId: input.evaluatorId,
-    ruleSetId: input.ruleSetId,
-    totalScore: input.totalScore,
-    violations: input.violations,
-    comments: input.comments || null,
-  }));
-
-  const createdEvaluations = await db
+export async function createBulkEvaluations(inputs: CreateEvaluationInput[]) {
+  const evaluations = await db
     .insert(qualityEvaluations)
-    .values(evaluationValues)
+    .values(
+      inputs.map((input) => ({
+        entryId: input.entryId,
+        evaluatorId: input.evaluatorId,
+        ruleSetId: input.ruleSetId,
+        totalScore: input.totalScore,
+        violations: input.violations,
+        comments: input.comments || null,
+      }))
+    )
     .returning();
 
-  return {
-    created: createdEvaluations,
-    skipped: existingIds.size,
-  };
+  return evaluations;
 }
 
 // ============================================================================
@@ -131,15 +102,16 @@ export async function bulkCreateEvaluations(inputs: CreateEvaluationInput[]) {
 // ============================================================================
 
 /**
- * Get evaluation by ID
+ * Get evaluation by ID with related data
  */
 export async function getEvaluationById(id: number) {
   const [evaluation] = await db
     .select({
       id: qualityEvaluations.id,
       entryId: qualityEvaluations.entryId,
+      employeeId: entries.employeeId,
+      employeeName: users.fullName,
       evaluatorId: qualityEvaluations.evaluatorId,
-      evaluatorName: users.fullName,
       ruleSetId: qualityEvaluations.ruleSetId,
       ruleSetName: evaluationRuleSets.name,
       totalScore: qualityEvaluations.totalScore,
@@ -148,7 +120,8 @@ export async function getEvaluationById(id: number) {
       evaluatedAt: qualityEvaluations.evaluatedAt,
     })
     .from(qualityEvaluations)
-    .innerJoin(users, eq(qualityEvaluations.evaluatorId, users.id))
+    .innerJoin(entries, eq(qualityEvaluations.entryId, entries.id))
+    .innerJoin(users, eq(entries.employeeId, users.id))
     .innerJoin(
       evaluationRuleSets,
       eq(qualityEvaluations.ruleSetId, evaluationRuleSets.id)
@@ -167,8 +140,9 @@ export async function getEvaluationByEntryId(entryId: number) {
     .select({
       id: qualityEvaluations.id,
       entryId: qualityEvaluations.entryId,
+      employeeId: entries.employeeId,
+      employeeName: users.fullName,
       evaluatorId: qualityEvaluations.evaluatorId,
-      evaluatorName: users.fullName,
       ruleSetId: qualityEvaluations.ruleSetId,
       ruleSetName: evaluationRuleSets.name,
       totalScore: qualityEvaluations.totalScore,
@@ -177,7 +151,8 @@ export async function getEvaluationByEntryId(entryId: number) {
       evaluatedAt: qualityEvaluations.evaluatedAt,
     })
     .from(qualityEvaluations)
-    .innerJoin(users, eq(qualityEvaluations.evaluatorId, users.id))
+    .innerJoin(entries, eq(qualityEvaluations.entryId, entries.id))
+    .innerJoin(users, eq(entries.employeeId, users.id))
     .innerJoin(
       evaluationRuleSets,
       eq(qualityEvaluations.ruleSetId, evaluationRuleSets.id)
@@ -298,48 +273,6 @@ export async function getEvaluations(filters: EvaluationFilters = {}) {
   };
 }
 
-/**
- * Get employee evaluations
- */
-export async function getEmployeeEvaluations(
-  employeeId: number,
-  filters?: { startDate?: string; endDate?: string; limit?: number }
-) {
-  const conditions = [eq(entries.employeeId, employeeId)];
-
-  if (filters?.startDate) {
-    conditions.push(
-      gte(qualityEvaluations.evaluatedAt, new Date(filters.startDate))
-    );
-  }
-
-  if (filters?.endDate) {
-    const end = new Date(filters.endDate);
-    end.setHours(23, 59, 59, 999);
-    conditions.push(lte(qualityEvaluations.evaluatedAt, end));
-  }
-
-  const query = db
-    .select({
-      id: qualityEvaluations.id,
-      entryId: qualityEvaluations.entryId,
-      totalScore: qualityEvaluations.totalScore,
-      violations: qualityEvaluations.violations,
-      comments: qualityEvaluations.comments,
-      evaluatedAt: qualityEvaluations.evaluatedAt,
-    })
-    .from(qualityEvaluations)
-    .innerJoin(entries, eq(qualityEvaluations.entryId, entries.id))
-    .where(and(...conditions))
-    .orderBy(desc(qualityEvaluations.evaluatedAt));
-
-  if (filters?.limit) {
-    return await query.limit(filters.limit);
-  }
-
-  return await query;
-}
-
 // ============================================================================
 // UPDATE
 // ============================================================================
@@ -365,13 +298,17 @@ export async function updateEvaluation(
     updateData.comments = input.comments;
   }
 
-  const [evaluation] = await db
+  const [updated] = await db
     .update(qualityEvaluations)
     .set(updateData)
     .where(eq(qualityEvaluations.id, id))
     .returning();
 
-  return evaluation;
+  if (!updated) {
+    throw new Error("Evaluation not found");
+  }
+
+  return updated;
 }
 
 // ============================================================================
@@ -382,16 +319,16 @@ export async function updateEvaluation(
  * Delete evaluation by ID
  */
 export async function deleteEvaluation(id: number) {
-  await db.delete(qualityEvaluations).where(eq(qualityEvaluations.id, id));
-}
-
-/**
- * Delete evaluations by entry IDs
- */
-export async function deleteEvaluationsByEntries(entryIds: number[]) {
-  await db
+  const [deleted] = await db
     .delete(qualityEvaluations)
-    .where(inArray(qualityEvaluations.entryId, entryIds));
+    .where(eq(qualityEvaluations.id, id))
+    .returning();
+
+  if (!deleted) {
+    throw new Error("Evaluation not found");
+  }
+
+  return deleted;
 }
 
 // ============================================================================
@@ -399,200 +336,48 @@ export async function deleteEvaluationsByEntries(entryIds: number[]) {
 // ============================================================================
 
 /**
- * Get evaluation statistics
+ * Get evaluation statistics for an employee
  */
-export async function getEvaluationStats(filters?: {
-  employeeId?: number;
-  teamId?: number;
-  startDate?: string;
-  endDate?: string;
-}) {
-  const conditions = [];
-
-  if (filters?.employeeId) {
-    conditions.push(eq(entries.employeeId, filters.employeeId));
-  }
-
-  if (filters?.teamId) {
-    conditions.push(eq(users.teamId, filters.teamId));
-  }
-
-  if (filters?.startDate) {
-    conditions.push(
-      gte(qualityEvaluations.evaluatedAt, new Date(filters.startDate))
-    );
-  }
-
-  if (filters?.endDate) {
-    const end = new Date(filters.endDate);
-    end.setHours(23, 59, 59, 999);
-    conditions.push(lte(qualityEvaluations.evaluatedAt, end));
-  }
-
+export async function getEmployeeEvaluationStats(employeeId: number) {
   const [stats] = await db
     .select({
-      total: sql<number>`count(*)`,
-      avgScore: sql<number>`avg(${qualityEvaluations.totalScore})`,
-      minScore: sql<number>`min(${qualityEvaluations.totalScore})`,
-      maxScore: sql<number>`max(${qualityEvaluations.totalScore})`,
-      perfectScores: sql<number>`count(*) filter (where ${qualityEvaluations.totalScore} = 100)`,
+      totalEvaluations: sql<number>`count(${qualityEvaluations.id})`,
+      averageScore: sql<number>`avg(${qualityEvaluations.totalScore})`,
+      highestScore: sql<number>`max(${qualityEvaluations.totalScore})`,
+      lowestScore: sql<number>`min(${qualityEvaluations.totalScore})`,
     })
     .from(qualityEvaluations)
     .innerJoin(entries, eq(qualityEvaluations.entryId, entries.id))
-    .innerJoin(users, eq(entries.employeeId, users.id))
-    .where(conditions.length > 0 ? and(...conditions) : undefined);
+    .where(eq(entries.employeeId, employeeId));
 
   return {
-    total: Number(stats?.total || 0),
-    avgScore: Math.round(Number(stats?.avgScore || 0)),
-    minScore: Number(stats?.minScore || 0),
-    maxScore: Number(stats?.maxScore || 0),
-    perfectScores: Number(stats?.perfectScores || 0),
+    totalEvaluations: Number(stats?.totalEvaluations || 0),
+    averageScore: Number(stats?.averageScore || 0),
+    highestScore: Number(stats?.highestScore || 0),
+    lowestScore: Number(stats?.lowestScore || 0),
   };
 }
 
 /**
- * Get quality trends over time
+ * Get evaluation statistics for a team
  */
-export async function getQualityTrends(
-  startDate: string,
-  endDate: string,
-  filters?: { employeeId?: number; teamId?: number }
-) {
-  const conditions = [
-    gte(qualityEvaluations.evaluatedAt, new Date(startDate)),
-    lte(qualityEvaluations.evaluatedAt, new Date(endDate)),
-  ];
-
-  if (filters?.employeeId) {
-    conditions.push(eq(entries.employeeId, filters.employeeId));
-  }
-
-  if (filters?.teamId) {
-    conditions.push(eq(users.teamId, filters.teamId));
-  }
-
-  return await db
+export async function getTeamEvaluationStats(teamId: number) {
+  const [stats] = await db
     .select({
-      date: sql<string>`DATE(${qualityEvaluations.evaluatedAt})`,
-      avgScore: sql<number>`avg(${qualityEvaluations.totalScore})`,
-      count: sql<number>`count(*)`,
+      totalEvaluations: sql<number>`count(${qualityEvaluations.id})`,
+      averageScore: sql<number>`avg(${qualityEvaluations.totalScore})`,
+      highestScore: sql<number>`max(${qualityEvaluations.totalScore})`,
+      lowestScore: sql<number>`min(${qualityEvaluations.totalScore})`,
     })
     .from(qualityEvaluations)
     .innerJoin(entries, eq(qualityEvaluations.entryId, entries.id))
     .innerJoin(users, eq(entries.employeeId, users.id))
-    .where(and(...conditions))
-    .groupBy(sql`DATE(${qualityEvaluations.evaluatedAt})`)
-    .orderBy(sql`DATE(${qualityEvaluations.evaluatedAt})`);
-}
+    .where(eq(users.teamId, teamId));
 
-/**
- * Get top performers by quality score
- */
-export async function getTopPerformersByQuality(
-  limit: number = 10,
-  filters?: { startDate?: string; endDate?: string; teamId?: number }
-) {
-  const conditions = [];
-
-  if (filters?.startDate) {
-    conditions.push(
-      gte(qualityEvaluations.evaluatedAt, new Date(filters.startDate))
-    );
-  }
-
-  if (filters?.endDate) {
-    const end = new Date(filters.endDate);
-    end.setHours(23, 59, 59, 999);
-    conditions.push(lte(qualityEvaluations.evaluatedAt, end));
-  }
-
-  if (filters?.teamId) {
-    conditions.push(eq(users.teamId, filters.teamId));
-  }
-
-  return await db
-    .select({
-      employeeId: entries.employeeId,
-      employeeName: users.fullName,
-      employeeEmail: users.email,
-      teamId: users.teamId,
-      avgScore: sql<number>`avg(${qualityEvaluations.totalScore})`,
-      evaluationCount: sql<number>`count(*)`,
-    })
-    .from(qualityEvaluations)
-    .innerJoin(entries, eq(qualityEvaluations.entryId, entries.id))
-    .innerJoin(users, eq(entries.employeeId, users.id))
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
-    .groupBy(entries.employeeId, users.fullName, users.email, users.teamId)
-    .orderBy(desc(sql`avg(${qualityEvaluations.totalScore})`))
-    .limit(limit);
-}
-
-/**
- * Get most common violations
- */
-export async function getMostCommonViolations(filters?: {
-  startDate?: string;
-  endDate?: string;
-  limit?: number;
-}) {
-  const conditions = [];
-
-  if (filters?.startDate) {
-    conditions.push(
-      gte(qualityEvaluations.evaluatedAt, new Date(filters.startDate))
-    );
-  }
-
-  if (filters?.endDate) {
-    const end = new Date(filters.endDate);
-    end.setHours(23, 59, 59, 999);
-    conditions.push(lte(qualityEvaluations.evaluatedAt, end));
-  }
-
-  // This is a simplified version - you'd need to unnest JSON for real implementation
-  const evaluations = await db
-    .select({
-      violations: qualityEvaluations.violations,
-    })
-    .from(qualityEvaluations)
-    .where(conditions.length > 0 ? and(...conditions) : undefined);
-
-  // Count violations
-  const violationCounts = new Map<
-    string,
-    { count: number; totalDeduction: number }
-  >();
-
-  for (const evaluation of evaluations) {
-    const violations = evaluation.violations as Violation[];
-    for (const violation of violations) {
-      const key = `${violation.ruleId}-${violation.ruleName}`;
-      const current = violationCounts.get(key) || {
-        count: 0,
-        totalDeduction: 0,
-      };
-      violationCounts.set(key, {
-        count: current.count + 1,
-        totalDeduction: current.totalDeduction + violation.deduction,
-      });
-    }
-  }
-
-  // Convert to array and sort
-  const result = Array.from(violationCounts.entries())
-    .map(([key, data]) => {
-      const [ruleId, ruleName] = key.split("-");
-      return {
-        ruleId: parseInt(ruleId),
-        ruleName,
-        count: data.count,
-        totalDeduction: data.totalDeduction,
-        avgDeduction: Math.round(data.totalDeduction / data.count),
-      };
-    })
-    .sort((a, b) => b.count - a.count);
-
-  return filters?.limit ? result.slice(0, filters.limit) : result;
+  return {
+    totalEvaluations: Number(stats?.totalEvaluations || 0),
+    averageScore: Number(stats?.averageScore || 0),
+    highestScore: Number(stats?.highestScore || 0),
+    lowestScore: Number(stats?.lowestScore || 0),
+  };
 }

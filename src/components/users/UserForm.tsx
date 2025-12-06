@@ -1,13 +1,15 @@
 /**
  * User Form Component
  *
- * Create or edit user form in a modal
+ * Create or edit user
  */
 
 "use client";
 
 import { useEffect } from "react";
-import { Modal, Form, Input, Select, Switch, message } from "antd";
+import { Modal, Form, Input, Select, Switch, Alert } from "antd";
+import { useRuleSets } from "@/lib/hooks/useRuleSets";
+import { useTeams } from "@/lib/hooks/useTeams";
 import useSWR from "swr";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
@@ -30,15 +32,12 @@ export function UserForm({
   const [form] = Form.useForm();
   const isEditing = !!user;
 
-  // Fetch roles and teams
-  const { data: rolesData } = useSWR(open ? "/api/roles" : null, fetcher);
-  const { data: teamsData } = useSWR(
-    open ? "/api/teams?stats=true" : null,
-    fetcher
-  );
-
+  // Fetch roles
+  const { data: rolesData } = useSWR("/api/roles", fetcher);
   const roles = rolesData?.data || [];
-  const teams = teamsData?.data || [];
+
+  // Fetch teams
+  const { teams } = useTeams({ includeStats: false });
 
   // Reset form when modal opens/closes or user changes
   useEffect(() => {
@@ -86,9 +85,10 @@ export function UserForm({
           rules={[
             { required: true, message: "Please enter full name" },
             { min: 2, message: "Name must be at least 2 characters" },
+            { max: 200, message: "Name must be less than 200 characters" },
           ]}
         >
-          <Input placeholder="John Doe" />
+          <Input placeholder="e.g., John Doe" maxLength={200} />
         </Form.Item>
 
         <Form.Item
@@ -97,52 +97,83 @@ export function UserForm({
           rules={[
             { required: true, message: "Please enter email" },
             { type: "email", message: "Please enter a valid email" },
+            { max: 255, message: "Email must be less than 255 characters" },
           ]}
         >
-          <Input placeholder="john.doe@example.com" disabled={isEditing} />
+          <Input
+            type="email"
+            placeholder="e.g., john.doe@example.com"
+            maxLength={255}
+          />
         </Form.Item>
 
-        {!isEditing && (
-          <Form.Item
-            name="password"
-            label="Password"
-            rules={[
-              { required: true, message: "Please enter password" },
-              { min: 6, message: "Password must be at least 6 characters" },
-            ]}
-          >
-            <Input.Password placeholder="Enter password" />
-          </Form.Item>
-        )}
+        <Form.Item
+          name="password"
+          label={
+            isEditing
+              ? "New Password (leave blank to keep current)"
+              : "Password"
+          }
+          rules={
+            isEditing
+              ? []
+              : [
+                  { required: true, message: "Please enter password" },
+                  { min: 8, message: "Password must be at least 8 characters" },
+                ]
+          }
+        >
+          <Input.Password
+            placeholder={
+              isEditing
+                ? "Leave blank to keep current password"
+                : "Enter password"
+            }
+            autoComplete="new-password"
+          />
+        </Form.Item>
 
         <Form.Item
           name="roleId"
           label="Role"
           rules={[{ required: true, message: "Please select a role" }]}
         >
-          <Select
-            placeholder="Select role"
-            options={roles.map((role: any) => ({
-              label: role.displayName,
-              value: role.id,
-            }))}
-          />
+          <Select placeholder="Select role">
+            {roles.map((role: any) => (
+              <Select.Option key={role.id} value={role.id}>
+                {role.displayName}
+              </Select.Option>
+            ))}
+          </Select>
         </Form.Item>
 
         <Form.Item name="teamId" label="Team">
-          <Select
-            placeholder="Select team (optional)"
-            allowClear
-            options={teams.map((team: any) => ({
-              label: `${team.name} (${team.memberCount || 0} members)`,
-              value: team.id,
-            }))}
-          />
+          <Select placeholder="Select team (optional)" allowClear>
+            {teams.map((team: any) => (
+              <Select.Option key={team.id} value={team.id}>
+                {team.name}
+              </Select.Option>
+            ))}
+          </Select>
         </Form.Item>
 
-        <Form.Item name="isActive" label="Status" valuePropName="checked">
+        <Form.Item
+          name="isActive"
+          label="Active Status"
+          valuePropName="checked"
+        >
           <Switch checkedChildren="Active" unCheckedChildren="Inactive" />
         </Form.Item>
+
+        {!isEditing && (
+          <Alert
+            message="Default Password"
+            description="Make sure to use a strong password. Users can change their password after logging in."
+            type="info"
+            showIcon
+            style={{ marginTop: "16px" }}
+          />
+        )}
       </Form>
     </Modal>
   );

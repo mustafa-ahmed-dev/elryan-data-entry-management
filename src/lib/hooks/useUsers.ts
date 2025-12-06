@@ -1,15 +1,15 @@
 /**
  * useUsers Hook
  *
- * Manages user data fetching and mutations
+ * Custom hook for managing users with CRUD operations
  */
 
-"use client";
+import { useState, useCallback } from "react";
+import useSWR, { mutate } from "swr";
 
-import useSWR from "swr";
-import { useState } from "react";
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
-interface UserFilters {
+interface UseUsersOptions {
   search?: string;
   roleId?: number;
   teamId?: number;
@@ -18,128 +18,170 @@ interface UserFilters {
   pageSize?: number;
 }
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+interface CreateUserInput {
+  fullName: string;
+  email: string;
+  password: string;
+  roleId: number;
+  teamId?: number;
+  isActive?: boolean;
+}
 
-export function useUsers(filters?: UserFilters) {
+interface UpdateUserInput {
+  fullName?: string;
+  email?: string;
+  password?: string;
+  roleId?: number;
+  teamId?: number;
+  isActive?: boolean;
+}
+
+export function useUsers(options: UseUsersOptions = {}) {
+  const {
+    search = "",
+    roleId,
+    teamId,
+    isActive,
+    page = 1,
+    pageSize = 20,
+  } = options;
+
   const [isCreating, setIsCreating] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Build query string
   const params = new URLSearchParams();
-  if (filters?.search) params.append("search", filters.search);
-  if (filters?.roleId) params.append("roleId", filters.roleId.toString());
-  if (filters?.teamId) params.append("teamId", filters.teamId.toString());
-  if (filters?.isActive !== undefined)
-    params.append("isActive", filters.isActive.toString());
-  if (filters?.page) params.append("page", filters.page.toString());
-  if (filters?.pageSize) params.append("pageSize", filters.pageSize.toString());
-  params.append("stats", "true");
+  if (search) params.append("search", search);
+  if (roleId !== undefined) params.append("roleId", roleId.toString());
+  if (teamId !== undefined) params.append("teamId", teamId.toString());
+  if (isActive !== undefined) params.append("isActive", isActive.toString());
+  params.append("page", page.toString());
+  params.append("pageSize", pageSize.toString());
 
   const queryString = params.toString();
   const url = `/api/users${queryString ? `?${queryString}` : ""}`;
 
-  // Fetch users with SWR
-  const { data, error, isLoading, mutate } = useSWR(url, fetcher, {
-    revalidateOnFocus: false,
-    dedupingInterval: 5000,
-  });
+  // Fetch users
+  const { data, error, isLoading } = useSWR(url, fetcher);
+
+  const users = data?.data || [];
+  const pagination = data?.pagination;
 
   // Create user
-  const createUser = async (userData: any) => {
-    try {
+  const createUser = useCallback(
+    async (input: CreateUserInput) => {
       setIsCreating(true);
-      const response = await fetch("/api/users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(userData),
-      });
+      try {
+        const res = await fetch("/api/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(input),
+        });
 
-      const result = await response.json();
+        const result = await res.json();
 
-      if (!response.ok) {
-        throw new Error(result.error || "Failed to create user");
+        if (!res.ok) {
+          return {
+            success: false,
+            error: result.error || "Failed to create user",
+          };
+        }
+
+        // Refresh the users list
+        await mutate(url);
+
+        return { success: true, data: result.data };
+      } catch (err) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : "Failed to create user",
+        };
+      } finally {
+        setIsCreating(false);
       }
-
-      // Revalidate the list
-      await mutate();
-
-      return { success: true, data: result.data };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : "Failed to create user",
-      };
-    } finally {
-      setIsCreating(false);
-    }
-  };
+    },
+    [url]
+  );
 
   // Update user
-  const updateUser = async (id: number, userData: any) => {
-    try {
+  const updateUser = useCallback(
+    async (userId: number, input: UpdateUserInput) => {
       setIsUpdating(true);
-      const response = await fetch(`/api/users/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(userData),
-      });
+      try {
+        const res = await fetch(`/api/users/${userId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(input),
+        });
 
-      const result = await response.json();
+        const result = await res.json();
 
-      if (!response.ok) {
-        throw new Error(result.error || "Failed to update user");
+        if (!res.ok) {
+          return {
+            success: false,
+            error: result.error || "Failed to update user",
+          };
+        }
+
+        // Refresh the users list
+        await mutate(url);
+
+        return { success: true, data: result.data };
+      } catch (err) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : "Failed to update user",
+        };
+      } finally {
+        setIsUpdating(false);
       }
-
-      // Revalidate the list
-      await mutate();
-
-      return { success: true, data: result.data };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : "Failed to update user",
-      };
-    } finally {
-      setIsUpdating(false);
-    }
-  };
+    },
+    [url]
+  );
 
   // Delete user
-  const deleteUser = async (id: number, permanent = false) => {
-    try {
+  const deleteUser = useCallback(
+    async (userId: number) => {
       setIsDeleting(true);
-      const response = await fetch(
-        `/api/users/${id}${permanent ? "?permanent=true" : ""}`,
-        {
+      try {
+        const res = await fetch(`/api/users/${userId}`, {
           method: "DELETE",
+        });
+
+        const result = await res.json();
+
+        if (!res.ok) {
+          return {
+            success: false,
+            error: result.error || "Failed to delete user",
+          };
         }
-      );
 
-      const result = await response.json();
+        // Refresh the users list
+        await mutate(url);
 
-      if (!response.ok) {
-        throw new Error(result.error || "Failed to delete user");
+        return { success: true };
+      } catch (err) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : "Failed to delete user",
+        };
+      } finally {
+        setIsDeleting(false);
       }
+    },
+    [url]
+  );
 
-      // Revalidate the list
-      await mutate();
-
-      return { success: true };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : "Failed to delete user",
-      };
-    } finally {
-      setIsDeleting(false);
-    }
-  };
+  // Refresh users
+  const refresh = useCallback(() => {
+    mutate(url);
+  }, [url]);
 
   return {
-    users: data?.data || [],
-    pagination: data?.pagination,
-    stats: data?.stats,
+    users,
+    pagination,
     isLoading,
     error,
     createUser,
@@ -148,21 +190,6 @@ export function useUsers(filters?: UserFilters) {
     isCreating,
     isUpdating,
     isDeleting,
-    refresh: mutate,
-  };
-}
-
-// Hook for single user
-export function useUser(id: number) {
-  const { data, error, isLoading, mutate } = useSWR(
-    id ? `/api/users/${id}` : null,
-    fetcher
-  );
-
-  return {
-    user: data?.data,
-    isLoading,
-    error,
-    refresh: mutate,
+    refresh,
   };
 }

@@ -1,5 +1,5 @@
 /**
- * Roles API
+ * Roles API Route
  * GET /api/roles - List all roles
  */
 
@@ -10,6 +10,7 @@ import { db } from "@/db";
 import { roles } from "@/db/schema";
 import { eq, asc } from "drizzle-orm";
 
+// GET /api/roles
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -19,13 +20,7 @@ export async function GET(request: NextRequest) {
 
     // Get all active roles
     const rolesList = await db
-      .select({
-        id: roles.id,
-        name: roles.name,
-        displayName: roles.displayName,
-        description: roles.description,
-        hierarchy: roles.hierarchy,
-      })
+      .select()
       .from(roles)
       .where(eq(roles.isActive, true))
       .orderBy(asc(roles.hierarchy));

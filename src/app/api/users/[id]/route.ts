@@ -1,6 +1,6 @@
 /**
- * User by ID API Routes
- * GET /api/users/[id] - Get user
+ * User Detail API Routes
+ * GET /api/users/[id] - Get user details
  * PATCH /api/users/[id] - Update user
  * DELETE /api/users/[id] - Delete user
  */
@@ -8,19 +8,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
-import { checkResourceAccess } from "@/db/utils/permissions";
-import {
-  getUserById,
-  updateUser,
-  deleteUser,
-  deactivateUser,
-} from "@/db/utils/users";
+import { checkPermission } from "@/db/utils/permissions";
+import { getUserById, updateUser, deleteUser } from "@/db/utils/users";
+import { hash } from "argon2";
 
 interface RouteParams {
   params: { id: string };
 }
 
-// GET /api/users/[id] - Get user by ID
+// GET /api/users/[id]
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const session = await getServerSession(authOptions);
@@ -28,31 +24,28 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const canRead = await checkPermission(session.user.id, "users", "read");
+    if (!canRead) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const userId = parseInt(params.id);
+    if (isNaN(userId)) {
+      return NextResponse.json({ error: "Invalid user ID" }, { status: 400 });
+    }
+
     const user = await getUserById(userId);
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Check permission
-    const canRead = await checkResourceAccess(
-      session.user.id,
-      "users",
-      "read",
-      {
-        ownerId: user.id,
-        teamId: user.teamId || undefined,
-      }
-    );
-
-    if (!canRead) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    // Remove password hash from response
+    const { passwordHash: _, ...userWithoutPassword } = user;
 
     return NextResponse.json({
       success: true,
-      data: user,
+      data: userWithoutPassword,
     });
   } catch (error) {
     console.error("Error fetching user:", error);
@@ -63,7 +56,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-// PATCH /api/users/[id] - Update user
+// PATCH /api/users/[id]
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     const session = await getServerSession(authOptions);
@@ -71,50 +64,51 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const userId = parseInt(params.id);
-    const existingUser = await getUserById(userId);
-
-    if (!existingUser) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    // Check permission
-    const canUpdate = await checkResourceAccess(
+    const canUpdate = await checkPermission(
       session.user.id,
       "users",
       "update",
-      {
-        ownerId: existingUser.id,
-        teamId: existingUser.teamId || undefined,
-      }
+      "all"
     );
-
     if (!canUpdate) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    const userId = parseInt(params.id);
+    if (isNaN(userId)) {
+      return NextResponse.json({ error: "Invalid user ID" }, { status: 400 });
+    }
+
     const body = await request.json();
 
-    // Update user
-    const user = await updateUser(userId, {
-      fullName: body.fullName,
-      email: body.email,
-      password: body.password,
-      roleId: body.roleId,
-      teamId: body.teamId,
-      isActive: body.isActive,
-    });
+    // Build update object
+    const updateData: any = {};
+    if (body.fullName) updateData.fullName = body.fullName;
+    if (body.email) updateData.email = body.email;
+    if (body.roleId !== undefined) updateData.roleId = body.roleId;
+    if (body.teamId !== undefined) updateData.teamId = body.teamId;
+    if (body.isActive !== undefined) updateData.isActive = body.isActive;
+
+    // Hash new password if provided
+    if (body.password) {
+      updateData.passwordHash = await hash(body.password);
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json(
+        { error: "No fields to update" },
+        { status: 400 }
+      );
+    }
+
+    const user = await updateUser(userId, updateData);
+
+    // Remove password hash from response
+    const { passwordHash: _, ...userWithoutPassword } = user;
 
     return NextResponse.json({
       success: true,
-      data: {
-        id: user.id,
-        fullName: user.fullName,
-        email: user.email,
-        roleId: user.roleId,
-        teamId: user.teamId,
-        isActive: user.isActive,
-      },
+      data: userWithoutPassword,
     });
   } catch (error) {
     console.error("Error updating user:", error);
@@ -127,7 +121,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-// DELETE /api/users/[id] - Delete user (soft delete)
+// DELETE /api/users/[id]
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const session = await getServerSession(authOptions);
@@ -135,36 +129,30 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const userId = parseInt(params.id);
-    const existingUser = await getUserById(userId);
-
-    if (!existingUser) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    // Check permission
-    const canDelete = await checkResourceAccess(
+    const canDelete = await checkPermission(
       session.user.id,
       "users",
       "delete",
-      {
-        ownerId: existingUser.id,
-        teamId: existingUser.teamId || undefined,
-      }
+      "all"
     );
-
     if (!canDelete) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Soft delete by default
-    await deactivateUser(userId);
-
-    // For permanent delete, use query param ?permanent=true
-    const searchParams = request.nextUrl.searchParams;
-    if (searchParams.get("permanent") === "true") {
-      await deleteUser(userId);
+    const userId = parseInt(params.id);
+    if (isNaN(userId)) {
+      return NextResponse.json({ error: "Invalid user ID" }, { status: 400 });
     }
+
+    // Cannot delete yourself
+    if (userId === session.user.id) {
+      return NextResponse.json(
+        { error: "Cannot delete your own account" },
+        { status: 400 }
+      );
+    }
+
+    await deleteUser(userId);
 
     return NextResponse.json({
       success: true,
@@ -173,7 +161,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   } catch (error) {
     console.error("Error deleting user:", error);
     return NextResponse.json(
-      { error: "Failed to delete user" },
+      {
+        error: error instanceof Error ? error.message : "Failed to delete user",
+      },
       { status: 500 }
     );
   }

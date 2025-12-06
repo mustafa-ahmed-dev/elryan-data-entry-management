@@ -216,6 +216,8 @@ export const scheduleHistory = pgTable("schedule_history", {
 
 /**
  * Evaluation Rule Sets - Versioned sets of quality rules
+ *
+ * Different versions can be created over time as quality standards evolve
  */
 export const evaluationRuleSets = pgTable("evaluation_rule_sets", {
   id: serial("id").primaryKey(),
@@ -228,6 +230,8 @@ export const evaluationRuleSets = pgTable("evaluation_rule_sets", {
 
 /**
  * Evaluation Rules - Individual quality check rules
+ *
+ * Each rule belongs to a rule set and defines a specific quality criterion
  */
 export const evaluationRules = pgTable("evaluation_rules", {
   id: serial("id").primaryKey(),
@@ -235,8 +239,13 @@ export const evaluationRules = pgTable("evaluation_rules", {
     .references(() => evaluationRuleSets.id)
     .notNull(),
   ruleName: varchar("rule_name", { length: 200 }).notNull(),
-  ruleType: varchar("rule_type", { length: 50 }).notNull(), // 'naming', 'specification', 'keyword', 'completeness', 'accuracy'
+
+  // Types: 'naming', 'specification', 'keyword', 'completeness', 'accuracy'
+  ruleType: varchar("rule_type", { length: 50 }).notNull(),
+
+  // How many points are deducted if this rule is violated
   deductionPoints: integer("deduction_points").notNull(),
+
   description: text("description"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -247,8 +256,7 @@ export const evaluationRules = pgTable("evaluation_rules", {
 
 /**
  * Entries - Data entry records submitted by employees
- * Simplified: boolean flags instead of reference tables
- * Timestamp-only tracking for productivity analysis
+ * These are the records that get evaluated
  */
 export const entries = pgTable("entries", {
   id: serial("id").primaryKey(),
@@ -261,7 +269,7 @@ export const entries = pgTable("entries", {
   productName: varchar("product_name", { length: 500 }).notNull(),
   productDescription: text("product_description"),
 
-  // Simplified boolean flags (evaluator determines)
+  // Quality flags (set by evaluator)
   followsNamingConvention: boolean("follows_naming_convention")
     .default(true)
     .notNull(),
@@ -272,7 +280,7 @@ export const entries = pgTable("entries", {
     .default(false)
     .notNull(),
 
-  // Timestamp-only tracking (best practice)
+  // Timestamp for productivity tracking
   entryTime: timestamp("entry_time").defaultNow().notNull(),
 });
 
@@ -421,7 +429,9 @@ export const evaluationRuleSetsRelations = relations(
   })
 );
 
-// Evaluation Rules Relations
+/**
+ * Evaluation Rules Relations
+ */
 export const evaluationRulesRelations = relations(
   evaluationRules,
   ({ one }) => ({
@@ -432,7 +442,9 @@ export const evaluationRulesRelations = relations(
   })
 );
 
-// Entries Relations
+/**
+ * Entries Relations
+ */
 export const entriesRelations = relations(entries, ({ one, many }) => ({
   employee: one(users, {
     fields: [entries.employeeId],
@@ -445,7 +457,9 @@ export const entriesRelations = relations(entries, ({ one, many }) => ({
   evaluations: many(qualityEvaluations),
 }));
 
-// Quality Evaluations Relations
+/**
+ * Quality Evaluations Relations
+ */
 export const qualityEvaluationsRelations = relations(
   qualityEvaluations,
   ({ one }) => ({
@@ -463,3 +477,107 @@ export const qualityEvaluationsRelations = relations(
     }),
   })
 );
+
+// ============================================================================
+// TYPESCRIPT TYPES - Add to the end of src/db/schema.ts
+// ============================================================================
+
+// Reference Tables
+export type EntryType = typeof entryTypes.$inferSelect;
+export type NewEntryType = typeof entryTypes.$inferInsert;
+
+// RBAC Types
+export type Role = typeof roles.$inferSelect;
+export type NewRole = typeof roles.$inferInsert;
+
+export type Resource = typeof resources.$inferSelect;
+export type NewResource = typeof resources.$inferInsert;
+
+export type Action = typeof actions.$inferSelect;
+export type NewAction = typeof actions.$inferInsert;
+
+export type Permission = typeof permissions.$inferSelect;
+export type NewPermission = typeof permissions.$inferInsert;
+
+export type PermissionAuditLog = typeof permissionAuditLog.$inferSelect;
+export type NewPermissionAuditLog = typeof permissionAuditLog.$inferInsert;
+
+// Organizational Types
+export type Team = typeof teams.$inferSelect;
+export type NewTeam = typeof teams.$inferInsert;
+
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+
+export type WeeklySchedule = typeof weeklySchedules.$inferSelect;
+export type NewWeeklySchedule = typeof weeklySchedules.$inferInsert;
+
+export type ScheduleHistory = typeof scheduleHistory.$inferSelect;
+export type NewScheduleHistory = typeof scheduleHistory.$inferInsert;
+
+// Evaluation System Types (already exist, keeping for completeness)
+export type EvaluationRuleSet = typeof evaluationRuleSets.$inferSelect;
+export type NewEvaluationRuleSet = typeof evaluationRuleSets.$inferInsert;
+
+export type EvaluationRule = typeof evaluationRules.$inferSelect;
+export type NewEvaluationRule = typeof evaluationRules.$inferInsert;
+
+export type Entry = typeof entries.$inferSelect;
+export type NewEntry = typeof entries.$inferInsert;
+
+export type QualityEvaluation = typeof qualityEvaluations.$inferSelect;
+export type NewQualityEvaluation = typeof qualityEvaluations.$inferInsert;
+
+// Custom Types
+export type Violation = {
+  ruleId: number;
+  ruleName: string;
+  deduction: number;
+};
+
+export type ScheduleData = {
+  monday?: { start: string; end: string; isWorking: boolean };
+  tuesday?: { start: string; end: string; isWorking: boolean };
+  wednesday?: { start: string; end: string; isWorking: boolean };
+  thursday?: { start: string; end: string; isWorking: boolean };
+  friday?: { start: string; end: string; isWorking: boolean };
+  saturday?: { start: string; end: string; isWorking: boolean };
+  sunday?: { start: string; end: string; isWorking: boolean };
+};
+
+export type DaySchedule = {
+  start: string;
+  end: string;
+  isWorking: boolean;
+};
+
+// Permission Conditions Type
+export type PermissionConditions = {
+  teamId?: number;
+  departmentId?: number;
+  customRules?: Record<string, any>;
+};
+
+// Schedule Status Type
+export type ScheduleStatus = "pending_approval" | "approved" | "rejected";
+
+// Schedule Change Type
+export type ScheduleChangeType =
+  | "created"
+  | "approved"
+  | "rejected"
+  | "modified";
+
+// Permission Scope Type
+export type PermissionScope = "own" | "team" | "all";
+
+// Permission Audit Action Type
+export type PermissionAuditAction = "created" | "updated" | "deleted";
+
+// Rule Types
+export type RuleType =
+  | "naming"
+  | "specification"
+  | "keyword"
+  | "completeness"
+  | "accuracy";

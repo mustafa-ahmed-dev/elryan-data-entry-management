@@ -16,10 +16,12 @@ import type { MenuProps } from "antd";
 import { signOut } from "next-auth/react";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { ROLE_LABELS } from "@/lib/constants/roles";
+import { useRouter } from "next/navigation";
 
 const { Text } = Typography;
 
 export function UserMenu() {
+  const router = useRouter();
   const { user } = useAuth();
 
   if (!user) return null;
@@ -62,10 +64,7 @@ export function UserMenu() {
       key: "settings",
       icon: <SettingOutlined />,
       label: "Settings",
-      onClick: () => {
-        // TODO: Navigate to settings page
-        console.log("Navigate to settings");
-      },
+      onClick: () => router.push("/settings"),
     },
     {
       type: "divider",

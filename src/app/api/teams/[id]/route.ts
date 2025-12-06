@@ -1,6 +1,6 @@
 /**
- * Team by ID API Routes
- * GET /api/teams/[id] - Get team
+ * Team Detail API Routes
+ * GET /api/teams/[id] - Get team details
  * PATCH /api/teams/[id] - Update team
  * DELETE /api/teams/[id] - Delete team
  */
@@ -15,7 +15,7 @@ interface RouteParams {
   params: { id: string };
 }
 
-// GET /api/teams/[id]
+// GET /api/teams/[id] - Get team details
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const session = await getServerSession(authOptions);
@@ -29,6 +29,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     const teamId = parseInt(params.id);
+    if (isNaN(teamId)) {
+      return NextResponse.json({ error: "Invalid team ID" }, { status: 400 });
+    }
+
     const team = await getTeamById(teamId);
 
     if (!team) {
@@ -48,7 +52,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-// PATCH /api/teams/[id]
+// PATCH /api/teams/[id] - Update team
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     const session = await getServerSession(authOptions);
@@ -67,12 +71,21 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     const teamId = parseInt(params.id);
+    if (isNaN(teamId)) {
+      return NextResponse.json({ error: "Invalid team ID" }, { status: 400 });
+    }
+
     const body = await request.json();
 
-    const team = await updateTeam(teamId, {
-      name: body.name,
-      description: body.description,
-    });
+    // Validate at least one field is being updated
+    if (!body.name && !body.description) {
+      return NextResponse.json(
+        { error: "No fields to update" },
+        { status: 400 }
+      );
+    }
+
+    const team = await updateTeam(teamId, body);
 
     return NextResponse.json({
       success: true,
@@ -89,7 +102,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-// DELETE /api/teams/[id]
+// DELETE /api/teams/[id] - Delete team
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const session = await getServerSession(authOptions);
@@ -108,6 +121,10 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     }
 
     const teamId = parseInt(params.id);
+    if (isNaN(teamId)) {
+      return NextResponse.json({ error: "Invalid team ID" }, { status: 400 });
+    }
+
     await deleteTeam(teamId);
 
     return NextResponse.json({
@@ -117,7 +134,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   } catch (error) {
     console.error("Error deleting team:", error);
     return NextResponse.json(
-      { error: "Failed to delete team" },
+      {
+        error: error instanceof Error ? error.message : "Failed to delete team",
+      },
       { status: 500 }
     );
   }

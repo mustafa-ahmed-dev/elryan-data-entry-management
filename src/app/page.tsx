@@ -26,7 +26,7 @@ export default function HomePage() {
         minHeight: "100vh",
       }}
     >
-      <Spin size="large" tip="Redirecting..." />
+      <Spin size="large" />
     </div>
   );
 }
