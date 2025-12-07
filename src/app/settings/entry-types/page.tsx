@@ -111,7 +111,7 @@ function EntryTypesContent() {
               title="Total Entry Types"
               value={entryTypes.length}
               prefix={<FileTextOutlined />}
-              valueStyle={{ color: "#1890ff" }}
+              styles={{ content: { color: "#1890ff" } }}
             />
           </Card>
         </Col>

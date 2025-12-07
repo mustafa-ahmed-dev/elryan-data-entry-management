@@ -219,7 +219,7 @@ function QualityRulesContent() {
               title="Total Rule Sets"
               value={totalRuleSets}
               prefix={<FileTextOutlined />}
-              valueStyle={{ color: "#1890ff" }}
+              styles={{ content: { color: "#1890ff" } }}
             />
           </Card>
         </Col>
@@ -229,7 +229,9 @@ function QualityRulesContent() {
               title="Active Rule Set"
               value={activeRuleSet ? "1" : "0"}
               prefix={<StarOutlined />}
-              valueStyle={{ color: activeRuleSet ? "#52c41a" : "#ff4d4f" }}
+              styles={{
+                content: { color: activeRuleSet ? "#52c41a" : "#ff4d4f" },
+              }}
               suffix={activeRuleSet && `(${activeRuleSet.name})`}
             />
           </Card>
@@ -240,7 +242,7 @@ function QualityRulesContent() {
               title="Inactive Rule Sets"
               value={inactiveRuleSets}
               prefix={<CheckCircleOutlined />}
-              valueStyle={{ color: "#666" }}
+              styles={{ content: { color: "#666" } }}
             />
           </Card>
         </Col>
@@ -338,7 +340,7 @@ function QualityRulesContent() {
           </Button>,
         ]}
         width={1000}
-        destroyOnClose
+        destroyOnHidden
       >
         {viewingRuleSet && (
           <div>

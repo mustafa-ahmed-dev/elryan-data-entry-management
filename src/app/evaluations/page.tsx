@@ -251,7 +251,7 @@ function EvaluationsContent() {
               title="Total Evaluations"
               value={totalEvaluations}
               prefix={<StarOutlined />}
-              valueStyle={{ color: "#1890ff" }}
+              styles={{ content: { color: "#1890ff" } }}
             />
           </Card>
         </Col>
@@ -262,8 +262,10 @@ function EvaluationsContent() {
               value={averageScore.toFixed(1)}
               suffix="/ 100"
               prefix={<TrophyOutlined />}
-              valueStyle={{
-                color: averageScore >= 80 ? "#3f8600" : "#faad14",
+              styles={{
+                content: {
+                  color: averageScore >= 80 ? "#3f8600" : "#faad14",
+                },
               }}
             />
           </Card>
@@ -274,7 +276,7 @@ function EvaluationsContent() {
               title="Excellent (≥90)"
               value={excellentCount}
               prefix={<CheckCircleOutlined />}
-              valueStyle={{ color: "#3f8600" }}
+              styles={{ content: { color: "#3f8600" } }}
             />
           </Card>
         </Col>
@@ -284,7 +286,7 @@ function EvaluationsContent() {
               title="Needs Improvement (<60)"
               value={needsImprovementCount}
               prefix={<WarningOutlined />}
-              valueStyle={{ color: "#cf1322" }}
+              styles={{ content: { color: "#cf1322" } }}
             />
           </Card>
         </Col>

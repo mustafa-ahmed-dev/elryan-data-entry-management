@@ -147,7 +147,8 @@ async function seedRBAC() {
       // =====================================================================
       // ADMIN PERMISSIONS (Full access to everything)
       // =====================================================================
-      // Users
+
+      // Users - Full CRUD
       {
         roleId: adminRole.id,
         resourceId: resourceMap.users,
@@ -173,7 +174,7 @@ async function seedRBAC() {
         scope: "all",
       },
 
-      // Teams
+      // Teams - Full CRUD
       {
         roleId: adminRole.id,
         resourceId: resourceMap.teams,
@@ -199,7 +200,7 @@ async function seedRBAC() {
         scope: "all",
       },
 
-      // Schedules
+      // Schedules - Full CRUD + Approve/Reject
       {
         roleId: adminRole.id,
         resourceId: resourceMap.schedules,
@@ -237,7 +238,13 @@ async function seedRBAC() {
         scope: "all",
       },
 
-      // Entries
+      // Entries - Full CRUD (FIXED: Added create and update)
+      {
+        roleId: adminRole.id,
+        resourceId: resourceMap.entries,
+        actionId: actionMap.create,
+        scope: "all",
+      },
       {
         roleId: adminRole.id,
         resourceId: resourceMap.entries,
@@ -247,11 +254,17 @@ async function seedRBAC() {
       {
         roleId: adminRole.id,
         resourceId: resourceMap.entries,
+        actionId: actionMap.update,
+        scope: "all",
+      },
+      {
+        roleId: adminRole.id,
+        resourceId: resourceMap.entries,
         actionId: actionMap.delete,
         scope: "all",
       },
 
-      // Evaluations
+      // Evaluations - Full CRUD
       {
         roleId: adminRole.id,
         resourceId: resourceMap.evaluations,
@@ -277,7 +290,7 @@ async function seedRBAC() {
         scope: "all",
       },
 
-      // Reports
+      // Reports - Read access
       {
         roleId: adminRole.id,
         resourceId: resourceMap.reports,
@@ -288,7 +301,8 @@ async function seedRBAC() {
       // =====================================================================
       // TEAM LEADER PERMISSIONS
       // =====================================================================
-      // Users (read team only)
+
+      // Users - Read team members only
       {
         roleId: teamLeaderRole.id,
         resourceId: resourceMap.users,
@@ -296,7 +310,7 @@ async function seedRBAC() {
         scope: "team",
       },
 
-      // Teams (read own team)
+      // Teams - Read own team
       {
         roleId: teamLeaderRole.id,
         resourceId: resourceMap.teams,
@@ -304,7 +318,7 @@ async function seedRBAC() {
         scope: "own",
       },
 
-      // Schedules (create for team, read team, update pending only)
+      // Schedules - Create for team, read team, update team
       {
         roleId: teamLeaderRole.id,
         resourceId: resourceMap.schedules,
@@ -324,7 +338,7 @@ async function seedRBAC() {
         scope: "team",
       },
 
-      // Entries (read team)
+      // Entries - Read team entries
       {
         roleId: teamLeaderRole.id,
         resourceId: resourceMap.entries,
@@ -332,7 +346,7 @@ async function seedRBAC() {
         scope: "team",
       },
 
-      // Evaluations (create/read/update for team)
+      // Evaluations - Create/Read/Update for team
       {
         roleId: teamLeaderRole.id,
         resourceId: resourceMap.evaluations,
@@ -352,7 +366,7 @@ async function seedRBAC() {
         scope: "team",
       },
 
-      // Reports (read team)
+      // Reports - Read team reports
       {
         roleId: teamLeaderRole.id,
         resourceId: resourceMap.reports,
@@ -363,7 +377,8 @@ async function seedRBAC() {
       // =====================================================================
       // EMPLOYEE PERMISSIONS
       // =====================================================================
-      // Users (read own profile, update own profile)
+
+      // Users - Read and update own profile
       {
         roleId: employeeRole.id,
         resourceId: resourceMap.users,
@@ -377,7 +392,7 @@ async function seedRBAC() {
         scope: "own",
       },
 
-      // Teams (read own team)
+      // Teams - Read own team
       {
         roleId: employeeRole.id,
         resourceId: resourceMap.teams,
@@ -385,7 +400,7 @@ async function seedRBAC() {
         scope: "own",
       },
 
-      // Schedules (read own)
+      // Schedules - Read own schedules
       {
         roleId: employeeRole.id,
         resourceId: resourceMap.schedules,
@@ -393,7 +408,7 @@ async function seedRBAC() {
         scope: "own",
       },
 
-      // Entries (create/read/update own)
+      // Entries - Create/Read/Update own entries
       {
         roleId: employeeRole.id,
         resourceId: resourceMap.entries,
@@ -413,7 +428,7 @@ async function seedRBAC() {
         scope: "own",
       },
 
-      // Evaluations (read own)
+      // Evaluations - Read own evaluations
       {
         roleId: employeeRole.id,
         resourceId: resourceMap.evaluations,
@@ -421,7 +436,7 @@ async function seedRBAC() {
         scope: "own",
       },
 
-      // Reports (read own)
+      // Reports - Read own reports
       {
         roleId: employeeRole.id,
         resourceId: resourceMap.reports,
@@ -442,6 +457,11 @@ async function seedRBAC() {
     console.log("  - 6 resources created");
     console.log("  - 6 actions created");
     console.log(`  - ${permissionsList.length} permissions created`);
+    console.log("");
+    console.log("🔐 Permission Breakdown:");
+    console.log("  • Admin: Full access to all resources");
+    console.log("  • Team Leader: Manage team schedules and evaluations");
+    console.log("  • Employee: Manage own entries and view own data");
     console.log("");
   } catch (error) {
     console.error("❌ Error seeding RBAC:", error);

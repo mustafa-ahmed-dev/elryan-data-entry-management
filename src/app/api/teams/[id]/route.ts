@@ -1,5 +1,5 @@
 /**
- * Team Detail API Routes
+ * Team Detail API Routes - Fixed for Next.js 15+
  * GET /api/teams/[id] - Get team details
  * PATCH /api/teams/[id] - Update team
  * DELETE /api/teams/[id] - Delete team
@@ -12,12 +12,14 @@ import { checkPermission } from "@/db/utils/permissions";
 import { getTeamById, updateTeam, deleteTeam } from "@/db/utils/teams";
 
 interface RouteParams {
-  params: { id: string };
+  params: Promise<{ id: string }>; // ✅ Now a Promise
 }
 
 // GET /api/teams/[id] - Get team details
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export async function GET(request: NextRequest, props: RouteParams) {
   try {
+    const params = await props.params; // ✅ Await params
+
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -53,8 +55,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 }
 
 // PATCH /api/teams/[id] - Update team
-export async function PATCH(request: NextRequest, { params }: RouteParams) {
+export async function PATCH(request: NextRequest, props: RouteParams) {
   try {
+    const params = await props.params; // ✅ Await params
+
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -78,7 +82,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const body = await request.json();
 
     // Validate at least one field is being updated
-    if (!body.name && !body.description) {
+    if (
+      !body.name &&
+      body.description === undefined &&
+      body.leaderId === undefined &&
+      body.isActive === undefined
+    ) {
       return NextResponse.json(
         { error: "No fields to update" },
         { status: 400 }
@@ -103,8 +112,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 }
 
 // DELETE /api/teams/[id] - Delete team
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export async function DELETE(request: NextRequest, props: RouteParams) {
   try {
+    const params = await props.params; // ✅ Await params
+
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -1,7 +1,7 @@
 /**
- * Users Settings Page
+ * Teams Settings Page
  *
- * Admin interface for managing users
+ * Admin interface for managing teams
  */
 
 "use client";
@@ -11,55 +11,64 @@ import { Card, Button, Space, message, Row, Col, Statistic } from "antd";
 import {
   PlusOutlined,
   ReloadOutlined,
+  TeamOutlined,
   UserOutlined,
-  CheckCircleOutlined,
-  StopOutlined,
 } from "@ant-design/icons";
 import { ProtectedRoute } from "@/components/auth";
 import { MainLayout } from "@/components/layout";
-import { UserTable, UserForm, UserFilters } from "@/components/settings/users";
-import { useUsers } from "@/lib/hooks/useUsers";
+import {
+  TeamTable,
+  TeamForm,
+  TeamFilters,
+  TeamMembers,
+} from "@/components/settings/teams";
+import { useTeams } from "@/lib/hooks/useTeams";
 
-export default function UsersSettingsPage() {
+export default function TeamsSettingsPage() {
   return (
     <ProtectedRoute
-      requiredPermission={{ action: "update", resource: "users" }}
+      requiredPermission={{ action: "update", resource: "teams" }}
     >
       <MainLayout>
-        <UsersSettingsContent />
+        <TeamsSettingsContent />
       </MainLayout>
     </ProtectedRoute>
   );
 }
 
-function UsersSettingsContent() {
+function TeamsSettingsContent() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [filters, setFilters] = useState<any>({});
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<any>(null);
+  const [editingTeam, setEditingTeam] = useState<any>(null);
+  const [viewingMembersTeam, setViewingMembersTeam] = useState<any>(null);
 
   const {
-    users,
+    teams,
     pagination,
     isLoading,
-    createUser,
-    updateUser,
-    deleteUser,
+    createTeam,
+    updateTeam,
+    deleteTeam,
     isCreating,
     isUpdating,
     isDeleting,
     refresh,
-  } = useUsers({
+  } = useTeams({
     ...filters,
     page,
     pageSize,
   });
 
   // Calculate statistics
-  const totalUsers = pagination?.total || 0;
-  const activeUsers = users.filter((u: any) => u.isActive).length;
-  const inactiveUsers = users.filter((u: any) => !u.isActive).length;
+  const totalTeams = pagination?.total || 0;
+  const totalMembers = teams.reduce(
+    (sum: number, t: any) => sum + (t.memberCount || 0),
+    0
+  );
+  const averageTeamSize =
+    totalTeams > 0 ? Math.round(totalMembers / totalTeams) : 0;
 
   // Handle table change
   const handleTableChange = (newPage: number, newPageSize: number) => {
@@ -75,44 +84,49 @@ function UsersSettingsContent() {
 
   // Handle create
   const handleCreate = () => {
-    setEditingUser(null);
+    setEditingTeam(null);
     setIsFormOpen(true);
   };
 
   // Handle edit
-  const handleEdit = (user: any) => {
-    setEditingUser(user);
+  const handleEdit = (team: any) => {
+    setEditingTeam(team);
     setIsFormOpen(true);
   };
 
   // Handle delete
-  const handleDelete = async (userId: number) => {
-    const result = await deleteUser(userId);
+  const handleDelete = async (teamId: number) => {
+    const result = await deleteTeam(teamId);
     if (result.success) {
-      message.success("User deactivated successfully");
+      message.success("Team deleted successfully");
     } else {
-      message.error(result.error || "Failed to deactivate user");
+      message.error(result.error || "Failed to delete team");
     }
+  };
+
+  // Handle view members
+  const handleViewMembers = (team: any) => {
+    setViewingMembersTeam(team);
   };
 
   // Handle form submit
   const handleFormSubmit = async (values: any) => {
     let result;
 
-    if (editingUser) {
-      result = await updateUser(editingUser.id, values);
+    if (editingTeam) {
+      result = await updateTeam(editingTeam.id, values);
     } else {
-      result = await createUser(values);
+      result = await createTeam(values);
     }
 
     if (result.success) {
       message.success(
-        editingUser ? "User updated successfully" : "User created successfully"
+        editingTeam ? "Team updated successfully" : "Team created successfully"
       );
       setIsFormOpen(false);
-      setEditingUser(null);
+      setEditingTeam(null);
     } else {
-      message.error(result.error || "Failed to save user");
+      message.error(result.error || "Failed to save team");
     }
   };
 
@@ -121,10 +135,10 @@ function UsersSettingsContent() {
       {/* Page Header */}
       <div style={{ marginBottom: "24px" }}>
         <h1 style={{ fontSize: "24px", fontWeight: 600, margin: 0 }}>
-          User Management
+          Team Management
         </h1>
         <p style={{ color: "#666", margin: "8px 0 0 0" }}>
-          Manage system users, roles, and access
+          Manage teams, assign leaders, and organize members
         </p>
       </div>
 
@@ -133,9 +147,9 @@ function UsersSettingsContent() {
         <Col xs={24} sm={8} md={8}>
           <Card>
             <Statistic
-              title="Total Users"
-              value={totalUsers}
-              prefix={<UserOutlined />}
+              title="Total Teams"
+              value={totalTeams}
+              prefix={<TeamOutlined />}
               styles={{ content: { color: "#1890ff" } }}
             />
           </Card>
@@ -143,9 +157,9 @@ function UsersSettingsContent() {
         <Col xs={24} sm={8} md={8}>
           <Card>
             <Statistic
-              title="Active Users"
-              value={activeUsers}
-              prefix={<CheckCircleOutlined />}
+              title="Total Members"
+              value={totalMembers}
+              prefix={<UserOutlined />}
               styles={{ content: { color: "#52c41a" } }}
             />
           </Card>
@@ -153,10 +167,10 @@ function UsersSettingsContent() {
         <Col xs={24} sm={8} md={8}>
           <Card>
             <Statistic
-              title="Inactive Users"
-              value={inactiveUsers}
-              prefix={<StopOutlined />}
-              styles={{ content: { color: "#999" } }}
+              title="Average Team Size"
+              value={averageTeamSize}
+              prefix={<TeamOutlined />}
+              styles={{ content: { color: "#722ed1" } }}
             />
           </Card>
         </Col>
@@ -164,7 +178,7 @@ function UsersSettingsContent() {
 
       {/* Filters Card */}
       <Card style={{ marginBottom: "16px" }}>
-        <UserFilters onFilterChange={handleFilterChange} />
+        <TeamFilters onFilterChange={handleFilterChange} />
       </Card>
 
       {/* Main Content */}
@@ -177,9 +191,9 @@ function UsersSettingsContent() {
           }}
         >
           <div>
-            <h3 style={{ margin: 0 }}>Users List</h3>
+            <h3 style={{ margin: 0 }}>Teams List</h3>
             <p style={{ color: "#666", margin: "4px 0 0 0", fontSize: "14px" }}>
-              Showing {users.length} of {totalUsers} users
+              Showing {teams.length} of {totalTeams} teams
             </p>
           </div>
           <Space>
@@ -191,40 +205,51 @@ function UsersSettingsContent() {
               icon={<PlusOutlined />}
               onClick={handleCreate}
             >
-              Create User
+              Create Team
             </Button>
           </Space>
         </Space>
 
-        <UserTable
-          users={users}
+        <TeamTable
+          teams={teams}
           loading={isLoading || isDeleting}
           pagination={{
             current: page,
             pageSize: pageSize,
             total: pagination?.total || 0,
             showSizeChanger: true,
-            showTotal: (total) => `Total ${total} users`,
+            showTotal: (total) => `Total ${total} teams`,
           }}
           onEdit={handleEdit}
           onDelete={handleDelete}
+          onViewMembers={handleViewMembers}
           onChange={handleTableChange}
           canEdit={true}
           canDelete={true}
         />
       </Card>
 
-      {/* User Form Modal */}
-      <UserForm
+      {/* Team Form Modal */}
+      <TeamForm
         open={isFormOpen}
-        user={editingUser}
+        team={editingTeam}
         onSubmit={handleFormSubmit}
         onCancel={() => {
           setIsFormOpen(false);
-          setEditingUser(null);
+          setEditingTeam(null);
         }}
         loading={isCreating || isUpdating}
       />
+
+      {/* Team Members Modal */}
+      {viewingMembersTeam && (
+        <TeamMembers
+          open={!!viewingMembersTeam}
+          team={viewingMembersTeam}
+          onClose={() => setViewingMembersTeam(null)}
+          onMembersChange={refresh}
+        />
+      )}
     </div>
   );
 }

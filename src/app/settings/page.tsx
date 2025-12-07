@@ -6,7 +6,7 @@
 
 "use client";
 
-import { Card, Row, Col } from "antd";
+import { Card, Row, Col, Badge } from "antd";
 import {
   FileTextOutlined,
   UserOutlined,
@@ -54,16 +54,14 @@ function SettingsContent() {
       description: "Manage users, roles, and permissions",
       icon: <UserOutlined style={{ fontSize: "48px", color: "#722ed1" }} />,
       path: "/settings/users",
-      available: false,
-      comingSoon: true,
+      available: true, // ✨ Changed to true
     },
     {
-      title: "Team Settings",
-      description: "Configure teams and team structures",
+      title: "Team Management",
+      description: "Manage teams, leaders, and team members",
       icon: <TeamOutlined style={{ fontSize: "48px", color: "#fa8c16" }} />,
       path: "/settings/teams",
-      available: false,
-      comingSoon: true,
+      available: true, // ✨ Changed to true
     },
     {
       title: "Security & Permissions",
@@ -83,39 +81,54 @@ function SettingsContent() {
     },
   ];
 
-  const handleCardClick = (path: string, available: boolean) => {
-    if (available) {
-      router.push(path);
+  const handleCardClick = (card: any) => {
+    if (card.available) {
+      router.push(card.path);
     }
   };
 
   return (
     <div style={{ padding: "24px" }}>
       {/* Page Header */}
-      <div style={{ marginBottom: "24px" }}>
-        <h1 style={{ fontSize: "24px", fontWeight: 600, margin: 0 }}>
+      <div style={{ marginBottom: "32px" }}>
+        <h1 style={{ fontSize: "28px", fontWeight: 600, margin: 0 }}>
           Settings
         </h1>
-        <p style={{ color: "#666", margin: "8px 0 0 0" }}>
-          Configure and manage system settings
+        <p style={{ color: "#666", margin: "8px 0 0 0", fontSize: "16px" }}>
+          Manage your system configuration and preferences
         </p>
       </div>
 
-      {/* Settings Cards */}
+      {/* Settings Cards Grid */}
       <Row gutter={[24, 24]}>
-        {settingsCards.map((setting) => (
-          <Col xs={24} sm={12} lg={8} key={setting.title}>
-            <Card
-              hoverable={setting.available}
-              onClick={() => handleCardClick(setting.path, setting.available)}
-              style={{
-                height: "100%",
-                cursor: setting.available ? "pointer" : "not-allowed",
-                opacity: setting.available ? 1 : 0.6,
-              }}
+        {settingsCards.map((card, index) => (
+          <Col xs={24} sm={12} md={8} key={index}>
+            <Badge.Ribbon
+              text="Coming Soon"
+              color="blue"
+              style={{ display: card.comingSoon ? "block" : "none" }}
             >
-              <div style={{ textAlign: "center", padding: "20px 0" }}>
-                <div style={{ marginBottom: "16px" }}>{setting.icon}</div>
+              <Card
+                hoverable={card.available}
+                onClick={() => handleCardClick(card)}
+                style={{
+                  height: "220px",
+                  cursor: card.available ? "pointer" : "not-allowed",
+                  opacity: card.available ? 1 : 0.6,
+                  transition: "all 0.3s",
+                }}
+                styles={{
+                  body: {
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    height: "100%",
+                    textAlign: "center",
+                  },
+                }}
+              >
+                <div style={{ marginBottom: "16px" }}>{card.icon}</div>
                 <h3
                   style={{
                     fontSize: "18px",
@@ -123,25 +136,13 @@ function SettingsContent() {
                     margin: "0 0 8px 0",
                   }}
                 >
-                  {setting.title}
-                  {setting.comingSoon && (
-                    <span
-                      style={{
-                        fontSize: "12px",
-                        color: "#faad14",
-                        marginLeft: "8px",
-                        fontWeight: 400,
-                      }}
-                    >
-                      (Coming Soon)
-                    </span>
-                  )}
+                  {card.title}
                 </h3>
-                <p style={{ color: "#666", margin: 0 }}>
-                  {setting.description}
+                <p style={{ color: "#666", margin: 0, fontSize: "14px" }}>
+                  {card.description}
                 </p>
-              </div>
-            </Card>
+              </Card>
+            </Badge.Ribbon>
           </Col>
         ))}
       </Row>

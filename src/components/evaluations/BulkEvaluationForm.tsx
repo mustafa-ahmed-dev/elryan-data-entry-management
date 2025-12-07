@@ -190,7 +190,7 @@ export function BulkEvaluationForm({
       }`}
       okButtonProps={{ disabled: selectedRowKeys.length === 0 }}
     >
-      <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+      <Space orientation="vertical" size="middle" style={{ width: "100%" }}>
         <Alert
           message="Select entries to evaluate in bulk"
           description="Choose one or more entries, set their scores, and create all evaluations at once. This is useful for evaluating multiple entries with similar quality standards."

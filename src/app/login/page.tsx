@@ -1,8 +1,5 @@
 /**
- * Login Page
- *
- * Provides email/password authentication
- * Redirects to dashboard on success
+ * Login Page - Fixed for Ant Design v6
  */
 
 "use client";
@@ -10,7 +7,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn, useSession } from "next-auth/react";
-import { Form, Input, Button, Card, Alert, Space, Typography } from "antd";
+import { Form, Input, Button, Card, Alert, Flex, Typography } from "antd";
 import { MailOutlined, LockOutlined, LoginOutlined } from "@ant-design/icons";
 
 const { Title, Text } = Typography;
@@ -50,13 +47,11 @@ export default function LoginPage() {
       });
 
       if (result?.error) {
-        // Show error message
         setError(result.error);
         return;
       }
 
       if (result?.ok) {
-        // Redirect to dashboard or callback URL
         const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
         router.push(callbackUrl);
         router.refresh();
@@ -104,9 +99,9 @@ export default function LoginPage() {
           boxShadow: "0 20px 60px rgba(0, 0, 0, 0.3)",
         }}
       >
-        <Space
-          direction="vertical"
-          size="large"
+        <Flex
+          vertical
+          gap="large"
           style={{ width: "100%", textAlign: "center" }}
         >
           {/* Header */}
@@ -181,18 +176,16 @@ export default function LoginPage() {
           </Form>
 
           {/* Demo Credentials */}
-          <div style={{ textAlign: "left", width: "100%" }}>
+          <div style={{ textAlign: "left", marginTop: "16px" }}>
             <Text type="secondary" style={{ fontSize: "12px" }}>
-              <strong>Demo Credentials:</strong>
-              <br />
-              Admin: mustafa.ahmed@elryan.com / Elryan@12345
-              <br />
-              Team Leader: sarah.johnson@elryan.com / Demo@12345
-              <br />
-              Employee: john.smith@elryan.com / Demo@12345
+              Demo Credentials:
+            </Text>
+            <br />
+            <Text code style={{ fontSize: "11px" }}>
+              mustafa.ahmed@elryan.com / Elryan@12345
             </Text>
           </div>
-        </Space>
+        </Flex>
       </Card>
     </div>
   );

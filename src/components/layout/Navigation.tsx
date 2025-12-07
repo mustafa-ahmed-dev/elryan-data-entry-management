@@ -32,7 +32,7 @@ export function Navigation({
 }: NavigationProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const { can, isLoading } = usePermissions();
+  const { can } = usePermissions();
 
   // Define all navigation items with their permission requirements
   const navigationItems = [
@@ -41,18 +41,6 @@ export function Navigation({
       icon: <DashboardOutlined />,
       label: "Dashboard",
       permission: null, // Everyone can access dashboard
-    },
-    {
-      key: "/users",
-      icon: <UserOutlined />,
-      label: "Users",
-      permission: { action: "read" as const, resource: "users" as const },
-    },
-    {
-      key: "/teams",
-      icon: <TeamOutlined />,
-      label: "Teams",
-      permission: { action: "read" as const, resource: "teams" as const },
     },
     {
       key: "/schedules",

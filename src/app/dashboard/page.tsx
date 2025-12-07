@@ -15,7 +15,6 @@ import {
   FileTextOutlined,
   StarOutlined,
   BarChartOutlined,
-  LogoutOutlined,
 } from "@ant-design/icons";
 import { signOut } from "next-auth/react";
 import { useAuth } from "@/lib/hooks/useAuth";
@@ -56,7 +55,7 @@ function DashboardContent() {
           background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
         }}
       >
-        <Space direction="vertical" size={0}>
+        <Space orientation="vertical" size={0}>
           <Title level={2} style={{ color: "white", margin: 0 }}>
             Welcome back, {user.fullName}!
           </Title>
@@ -260,7 +259,7 @@ function DashboardContent() {
 
       {/* Test Section - Show permission checks */}
       <Card title="🧪 Permission Test Results">
-        <Space direction="vertical" style={{ width: "100%" }}>
+        <Space orientation="vertical" style={{ width: "100%" }}>
           <Text>
             <strong>Role Checks:</strong>
           </Text>

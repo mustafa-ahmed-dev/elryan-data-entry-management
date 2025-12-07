@@ -1,5 +1,5 @@
 /**
- * Protected Route Component
+ * Protected Route Component - Fixed for Direct Link Access
  *
  * Wraps pages that require authentication
  * Redirects to login if not authenticated
@@ -10,7 +10,7 @@
 
 import { useEffect, ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Spin } from "antd";
+import { Spin, Result, Button } from "antd";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { usePermissions } from "@/lib/hooks/usePermissions";
 import type { UserRole } from "@/lib/constants/roles";
@@ -55,10 +55,11 @@ export function ProtectedRoute({
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { can, isLoading: permissionsLoading } = usePermissions();
 
+  // Wait for BOTH auth and permissions to load
   const isLoading = authLoading || permissionsLoading;
 
   useEffect(() => {
-    // Wait for auth to load
+    // CRITICAL: Don't do anything while still loading
     if (isLoading) return;
 
     // Redirect if not authenticated
@@ -66,41 +67,9 @@ export function ProtectedRoute({
       router.push(redirectTo);
       return;
     }
+  }, [isLoading, isAuthenticated, router, redirectTo]);
 
-    // Check role-based access
-    if (allowedRoles && user) {
-      const hasAllowedRole = allowedRoles.includes(user.roleName);
-      if (!hasAllowedRole) {
-        router.push("/unauthorized");
-        return;
-      }
-    }
-
-    // Check permission-based access
-    if (requiredPermission && !isLoading) {
-      const hasPermission = can(
-        requiredPermission.action,
-        requiredPermission.resource,
-        requiredPermission.scope
-      );
-
-      if (!hasPermission) {
-        router.push("/unauthorized");
-        return;
-      }
-    }
-  }, [
-    isAuthenticated,
-    isLoading,
-    user,
-    allowedRoles,
-    requiredPermission,
-    can,
-    router,
-    redirectTo,
-  ]);
-
-  // Show loading state
+  // Show loading state - this prevents the flash of unauthorized
   if (isLoading) {
     return (
       loadingComponent || (
@@ -112,7 +81,7 @@ export function ProtectedRoute({
             minHeight: "100vh",
           }}
         >
-          <Spin size="large" />
+          <Spin size="large" tip="Loading..." />
         </div>
       )
     );
@@ -135,12 +104,21 @@ export function ProtectedRoute({
               justifyContent: "center",
               alignItems: "center",
               minHeight: "100vh",
-              flexDirection: "column",
-              gap: "16px",
             }}
           >
-            <h2>Access Denied</h2>
-            <p>You do not have permission to access this page.</p>
+            <Result
+              status="403"
+              title="Access Denied"
+              subTitle="You do not have permission to access this page."
+              extra={
+                <Button
+                  type="primary"
+                  onClick={() => router.push("/dashboard")}
+                >
+                  Go to Dashboard
+                </Button>
+              }
+            />
           </div>
         )
       );
@@ -164,12 +142,21 @@ export function ProtectedRoute({
               justifyContent: "center",
               alignItems: "center",
               minHeight: "100vh",
-              flexDirection: "column",
-              gap: "16px",
             }}
           >
-            <h2>Access Denied</h2>
-            <p>You do not have the required permissions to access this page.</p>
+            <Result
+              status="403"
+              title="Access Denied"
+              subTitle="You do not have the required permissions to access this page."
+              extra={
+                <Button
+                  type="primary"
+                  onClick={() => router.push("/dashboard")}
+                >
+                  Go to Dashboard
+                </Button>
+              }
+            />
           </div>
         )
       );

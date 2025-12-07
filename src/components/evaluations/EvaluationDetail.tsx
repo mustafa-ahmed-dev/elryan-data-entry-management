@@ -70,7 +70,7 @@ export function EvaluationDetail({ evaluation }: EvaluationDetailProps) {
   const scoreStatus = getScoreStatus(totalScore);
 
   return (
-    <Space direction="vertical" size="large" style={{ width: "100%" }}>
+    <Space orientation="vertical" size="large" style={{ width: "100%" }}>
       {/* Score Overview */}
       <Card>
         <div style={{ textAlign: "center" }}>
@@ -147,7 +147,7 @@ export function EvaluationDetail({ evaluation }: EvaluationDetailProps) {
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description={
-              <Space direction="vertical" size="small">
+              <Space orientation="vertical" size="small">
                 <CheckCircleOutlined
                   style={{ fontSize: "48px", color: "#52c41a" }}
                 />
