@@ -9,25 +9,31 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { getUserPermissions } from "@/db/utils/permissions";
+import {
+  ApiErrors,
+  withErrorHandling,
+  getRequestContext,
+} from "@/lib/api/errors";
 
-export async function GET(request: NextRequest) {
-  try {
-    // Get current session
-    const session = await getServerSession(authOptions);
+export const GET = withErrorHandling(async (request: NextRequest) => {
+  const context = await getRequestContext(request);
 
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return ApiErrors.unauthorized(context);
+  }
 
-    // Fetch user permissions from database
-    const userPermissions = await getUserPermissions(session.user.id);
+  context.userId = session.user.id;
+  context.userEmail = session.user.email;
 
-    if (!userPermissions) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
+  // Fetch user permissions from database
+  const userPermissions = await getUserPermissions(session.user.id);
+  if (!userPermissions) {
+    return ApiErrors.userNotFound(context);
+  }
 
-    // Return permissions
-    return NextResponse.json({
+  return NextResponse.json(
+    {
       success: true,
       permissions: userPermissions.permissions,
       role: {
@@ -36,13 +42,11 @@ export async function GET(request: NextRequest) {
         hierarchy: userPermissions.roleHierarchy,
       },
       teamId: userPermissions.teamId,
-    });
-  } catch (error) {
-    console.error("Error fetching permissions:", error);
-
-    return NextResponse.json(
-      { error: "Failed to fetch permissions" },
-      { status: 500 }
-    );
-  }
-}
+    },
+    {
+      headers: {
+        "X-Request-ID": context.requestId || "",
+      },
+    }
+  );
+});

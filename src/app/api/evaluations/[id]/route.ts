@@ -14,18 +14,28 @@ import {
   updateEvaluation,
   deleteEvaluation,
 } from "@/db/utils/evaluations";
+import {
+  ApiErrors,
+  withErrorHandling,
+  getRequestContext,
+} from "@/lib/api/errors";
 
 interface RouteParams {
   params: { id: string };
 }
 
-// GET /api/evaluations/[id] - Get evaluation details
-export async function GET(request: NextRequest, { params }: RouteParams) {
-  try {
+// GET /api/evaluations/[id]
+export const GET = withErrorHandling(
+  async (request: NextRequest, { params }: RouteParams) => {
+    const context = await getRequestContext(request);
+
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return ApiErrors.unauthorized(context);
     }
+
+    context.userId = session.user.id;
+    context.userEmail = session.user.email;
 
     const canRead = await checkPermission(
       session.user.id,
@@ -33,46 +43,45 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       "read"
     );
     if (!canRead) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return ApiErrors.insufficientPermissions(context, "evaluations:read");
     }
 
     const evaluationId = parseInt(params.id);
     if (isNaN(evaluationId)) {
-      return NextResponse.json(
-        { error: "Invalid evaluation ID" },
-        { status: 400 }
-      );
+      return ApiErrors.invalidId(context, "Evaluation");
     }
 
     const evaluation = await getEvaluationById(evaluationId);
-
     if (!evaluation) {
-      return NextResponse.json(
-        { error: "Evaluation not found" },
-        { status: 404 }
-      );
+      return ApiErrors.notFound(context, "Evaluation");
     }
 
-    return NextResponse.json({
-      success: true,
-      data: evaluation,
-    });
-  } catch (error) {
-    console.error("Error fetching evaluation:", error);
     return NextResponse.json(
-      { error: "Failed to fetch evaluation" },
-      { status: 500 }
+      {
+        success: true,
+        data: evaluation,
+      },
+      {
+        headers: {
+          "X-Request-ID": context.requestId || "",
+        },
+      }
     );
   }
-}
+);
 
-// PATCH /api/evaluations/[id] - Update evaluation
-export async function PATCH(request: NextRequest, { params }: RouteParams) {
-  try {
+// PATCH /api/evaluations/[id]
+export const PATCH = withErrorHandling(
+  async (request: NextRequest, { params }: RouteParams) => {
+    const context = await getRequestContext(request);
+
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return ApiErrors.unauthorized(context);
     }
+
+    context.userId = session.user.id;
+    context.userEmail = session.user.email;
 
     const canUpdate = await checkPermission(
       session.user.id,
@@ -80,72 +89,79 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       "update"
     );
     if (!canUpdate) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return ApiErrors.insufficientPermissions(context, "evaluations:update");
     }
 
     const evaluationId = parseInt(params.id);
     if (isNaN(evaluationId)) {
-      return NextResponse.json(
-        { error: "Invalid evaluation ID" },
-        { status: 400 }
-      );
+      return ApiErrors.invalidId(context, "Evaluation");
     }
 
     const body = await request.json();
 
-    // Validate at least one field is being updated
-    if (!body.totalScore && !body.violations && !body.comments) {
-      return NextResponse.json(
-        { error: "No fields to update" },
-        { status: 400 }
-      );
-    }
+    // Build update object
+    const updateData: any = {};
 
-    // Validate score range if provided
     if (body.totalScore !== undefined) {
-      if (body.totalScore < 0 || body.totalScore > 100) {
-        return NextResponse.json(
-          { error: "Score must be between 0 and 100" },
-          { status: 400 }
+      const score = parseFloat(body.totalScore);
+      if (isNaN(score) || score < 0 || score > 100) {
+        return ApiErrors.invalidInput(
+          context,
+          "Score must be between 0 and 100",
+          "totalScore"
         );
       }
+      updateData.totalScore = score;
     }
 
-    // Validate violations if provided
-    if (body.violations !== undefined && !Array.isArray(body.violations)) {
-      return NextResponse.json(
-        { error: "Violations must be an array" },
-        { status: 400 }
-      );
+    if (body.violations !== undefined) {
+      if (!Array.isArray(body.violations)) {
+        return ApiErrors.invalidInput(
+          context,
+          "Violations must be an array",
+          "violations"
+        );
+      }
+      updateData.violations = body.violations;
     }
 
-    const evaluation = await updateEvaluation(evaluationId, body);
+    if (body.comments !== undefined) {
+      updateData.comments = body.comments;
+    }
 
-    return NextResponse.json({
-      success: true,
-      data: evaluation,
-    });
-  } catch (error) {
-    console.error("Error updating evaluation:", error);
+    if (Object.keys(updateData).length === 0) {
+      return ApiErrors.invalidInput(context, "No valid fields to update");
+    }
+
+    const evaluation = await updateEvaluation(evaluationId, updateData);
+
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to update evaluation",
+        success: true,
+        data: evaluation,
+        message: "Evaluation updated successfully",
       },
-      { status: 500 }
+      {
+        headers: {
+          "X-Request-ID": context.requestId || "",
+        },
+      }
     );
   }
-}
+);
 
-// DELETE /api/evaluations/[id] - Delete evaluation
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  try {
+// DELETE /api/evaluations/[id]
+export const DELETE = withErrorHandling(
+  async (request: NextRequest, { params }: RouteParams) => {
+    const context = await getRequestContext(request);
+
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return ApiErrors.unauthorized(context);
     }
+
+    context.userId = session.user.id;
+    context.userEmail = session.user.email;
 
     const canDelete = await checkPermission(
       session.user.id,
@@ -154,33 +170,30 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       "all"
     );
     if (!canDelete) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return ApiErrors.insufficientPermissions(
+        context,
+        "evaluations:delete:all"
+      );
     }
 
     const evaluationId = parseInt(params.id);
     if (isNaN(evaluationId)) {
-      return NextResponse.json(
-        { error: "Invalid evaluation ID" },
-        { status: 400 }
-      );
+      return ApiErrors.invalidId(context, "Evaluation");
     }
 
     await deleteEvaluation(evaluationId);
 
-    return NextResponse.json({
-      success: true,
-      message: "Evaluation deleted successfully",
-    });
-  } catch (error) {
-    console.error("Error deleting evaluation:", error);
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to delete evaluation",
+        success: true,
+        message: "Evaluation deleted successfully",
+        data: { id: evaluationId },
       },
-      { status: 500 }
+      {
+        headers: {
+          "X-Request-ID": context.requestId || "",
+        },
+      }
     );
   }
-}
+);

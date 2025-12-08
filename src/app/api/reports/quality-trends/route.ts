@@ -1,5 +1,5 @@
 /**
- * Quality Trends API
+ * Quality Trends API - WITH ENHANCED ERROR HANDLING
  * GET /api/reports/quality-trends - Get quality trends over time
  */
 
@@ -8,69 +8,104 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { checkPermission, getUserPermissions } from "@/db/utils/permissions";
 import { getQualityTrends } from "@/db/utils/evaluations";
+import {
+  ApiErrors,
+  withErrorHandling,
+  getRequestContext,
+} from "@/lib/api/errors";
 
-export async function GET(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+export const GET = withErrorHandling(async (request: NextRequest) => {
+  // Get context FIRST
+  const context = await getRequestContext(request);
 
-    // Check permission
-    const canRead = await checkPermission(session.user.id, "reports", "read");
-    if (!canRead) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return ApiErrors.unauthorized(context);
+  }
 
-    // Get user permissions
-    const userPerms = await getUserPermissions(session.user.id);
-    if (!userPerms) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+  // Add user info to context
+  context.userId = session.user.id;
+  context.userEmail = session.user.email;
 
-    // Get query parameters
-    const searchParams = request.nextUrl.searchParams;
-    const startDate = searchParams.get("startDate");
-    const endDate = searchParams.get("endDate");
+  // Check permission
+  const canRead = await checkPermission(session.user.id, "reports", "read");
+  if (!canRead) {
+    return ApiErrors.insufficientPermissions(context, "reports:read");
+  }
 
-    if (!startDate || !endDate) {
-      return NextResponse.json(
-        { error: "Start date and end date are required" },
-        { status: 400 }
-      );
-    }
+  // Get user permissions
+  const userPerms = await getUserPermissions(session.user.id);
+  if (!userPerms) {
+    return ApiErrors.forbidden(context);
+  }
 
-    // Determine filters based on scope
-    const filters: any = {};
+  // Get query parameters
+  const searchParams = request.nextUrl.searchParams;
+  const startDate = searchParams.get("startDate");
+  const endDate = searchParams.get("endDate");
 
-    const readPermission = userPerms.permissions.find(
-      (p) => p.resource === "reports" && p.action === "read"
+  // Validate required parameters
+  if (!startDate) {
+    return ApiErrors.missingField(context, "startDate");
+  }
+
+  if (!endDate) {
+    return ApiErrors.missingField(context, "endDate");
+  }
+
+  // Validate date formats
+  if (isNaN(Date.parse(startDate))) {
+    return ApiErrors.invalidInput(
+      context,
+      "Invalid start date format",
+      "startDate"
     );
+  }
 
-    if (readPermission?.scope === "own") {
-      filters.employeeId = session.user.id;
-    } else if (readPermission?.scope === "team") {
-      if (userPerms.teamId) {
-        filters.teamId = userPerms.teamId;
-      }
+  if (isNaN(Date.parse(endDate))) {
+    return ApiErrors.invalidInput(
+      context,
+      "Invalid end date format",
+      "endDate"
+    );
+  }
+
+  // Validate date range
+  if (new Date(startDate) > new Date(endDate)) {
+    return ApiErrors.invalidDateRange(context);
+  }
+
+  // Determine filters based on scope
+  const filters: any = {};
+
+  const readPermission = userPerms.permissions.find(
+    (p) => p.resource === "reports" && p.action === "read"
+  );
+
+  if (readPermission?.scope === "own") {
+    filters.employeeId = session.user.id;
+  } else if (readPermission?.scope === "team") {
+    if (userPerms.teamId) {
+      filters.teamId = userPerms.teamId;
     }
+  }
 
-    // Get quality trends
-    const trends = await getQualityTrends(startDate, endDate, filters);
+  // Get quality trends
+  const trends = await getQualityTrends(startDate, endDate, filters);
 
-    return NextResponse.json({
+  return NextResponse.json(
+    {
       success: true,
       data: trends,
       dateRange: {
         start: startDate,
         end: endDate,
       },
-    });
-  } catch (error) {
-    console.error("Error fetching quality trends:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch quality trends" },
-      { status: 500 }
-    );
-  }
-}
+    },
+    {
+      headers: {
+        "X-Request-ID": context.requestId || "",
+      },
+    }
+  );
+});

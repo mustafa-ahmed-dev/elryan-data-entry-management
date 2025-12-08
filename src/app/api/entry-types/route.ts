@@ -11,88 +11,113 @@ import { checkPermission } from "@/db/utils/permissions";
 import { db } from "@/db";
 import { entryTypes } from "@/db/schema";
 import { desc } from "drizzle-orm";
+import {
+  ApiErrors,
+  withErrorHandling,
+  getRequestContext,
+} from "@/lib/api/errors";
 
 // GET /api/entry-types - List all entry types
-export async function GET(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+export const GET = withErrorHandling(async (request: NextRequest) => {
+  const context = await getRequestContext(request);
 
-    const canRead = await checkPermission(session.user.id, "entries", "read");
-    if (!canRead) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return ApiErrors.unauthorized(context);
+  }
 
-    // Get all entry types
-    const types = await db
-      .select()
-      .from(entryTypes)
-      .orderBy(desc(entryTypes.createdAt));
+  context.userId = session.user.id;
+  context.userEmail = session.user.email;
 
-    return NextResponse.json({
+  const canRead = await checkPermission(session.user.id, "entries", "read");
+  if (!canRead) {
+    return ApiErrors.insufficientPermissions(context, "entries:read");
+  }
+
+  // Get all entry types
+  const types = await db
+    .select()
+    .from(entryTypes)
+    .orderBy(desc(entryTypes.createdAt));
+
+  return NextResponse.json(
+    {
       success: true,
       data: types,
-    });
-  } catch (error) {
-    console.error("Error fetching entry types:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch entry types" },
-      { status: 500 }
-    );
-  }
-}
+    },
+    {
+      headers: {
+        "X-Request-ID": context.requestId || "",
+      },
+    }
+  );
+});
 
 // POST /api/entry-types - Create new entry type
-export async function POST(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+export const POST = withErrorHandling(async (request: NextRequest) => {
+  const context = await getRequestContext(request);
 
-    // Check permission (admin only)
-    const canCreate = await checkPermission(
-      session.user.id,
-      "entries",
-      "create",
-      "all"
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return ApiErrors.unauthorized(context);
+  }
+
+  context.userId = session.user.id;
+  context.userEmail = session.user.email;
+
+  // Check permission (admin only)
+  const canCreate = await checkPermission(
+    session.user.id,
+    "entries",
+    "create",
+    "all"
+  );
+  if (!canCreate) {
+    return ApiErrors.insufficientPermissions(context, "entries:create:all");
+  }
+
+  const body = await request.json();
+
+  // Validate required fields
+  if (!body.name) {
+    return ApiErrors.missingField(context, "name");
+  }
+
+  if (typeof body.name !== "string" || body.name.trim().length === 0) {
+    return ApiErrors.invalidInput(
+      context,
+      "Name must be a non-empty string",
+      "name"
     );
-    if (!canCreate) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+  }
 
-    const body = await request.json();
-
-    // Validate required fields
-    if (!body.name) {
-      return NextResponse.json({ error: "Name is required" }, { status: 400 });
-    }
-
+  try {
     // Create entry type
     const [entryType] = await db
       .insert(entryTypes)
       .values({
-        name: body.name,
+        name: body.name.trim(),
         description: body.description || null,
       })
       .returning();
 
-    return NextResponse.json({
-      success: true,
-      data: entryType,
-    });
-  } catch (error) {
-    console.error("Error creating entry type:", error);
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to create entry type",
+        success: true,
+        data: entryType,
+        message: "Entry type created successfully",
       },
-      { status: 500 }
+      {
+        status: 201,
+        headers: {
+          "X-Request-ID": context.requestId || "",
+        },
+      }
     );
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("duplicate")) {
+      return ApiErrors.duplicateEntry(context, "name");
+    }
+    throw error;
   }
-}
+});

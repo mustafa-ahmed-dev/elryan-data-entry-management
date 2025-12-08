@@ -1,5 +1,5 @@
 /**
- * Team Statistics API
+ * Team Statistics API - WITH ENHANCED ERROR HANDLING
  * GET /api/teams/[id]/stats - Get detailed team performance statistics
  */
 
@@ -8,29 +8,41 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { checkPermission } from "@/db/utils/permissions";
 import { db } from "@/db";
-import { users, entries, evaluations, teams } from "@/db/schema";
-import { eq, and, sql, count, avg } from "drizzle-orm";
+import { users, entries, qualityEvaluations, teams } from "@/db/schema";
+import { eq, and, s count, avg, inArray } from "drizzle-orm";
+import {
+  ApiErrors,
+  withErrorHandling,
+  getRequestContext,
+} from "@/lib/api/errors";
 
 interface RouteParams {
   params: { id: string };
 }
 
 // GET /api/teams/[id]/stats
-export async function GET(request: NextRequest, { params }: RouteParams) {
-  try {
+export const GET = withErrorHandling(
+  async (request: NextRequest, { params }: RouteParams) => {
+    // Get context FIRST
+    const context = await getRequestContext(request);
+
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return ApiErrors.unauthorized(context);
     }
+
+    // Add user info to context
+    context.userId = session.user.id;
+    context.userEmail = session.user.email;
 
     const canRead = await checkPermission(session.user.id, "teams", "read");
     if (!canRead) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return ApiErrors.insufficientPermissions(context, "teams:read");
     }
 
     const teamId = parseInt(params.id);
     if (isNaN(teamId)) {
-      return NextResponse.json({ error: "Invalid team ID" }, { status: 400 });
+      return ApiErrors.invalidId(context, "Team");
     }
 
     // Check if team exists
@@ -41,7 +53,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       .limit(1);
 
     if (!team) {
-      return NextResponse.json({ error: "Team not found" }, { status: 404 });
+      return ApiErrors.notFound(context, "Team");
     }
 
     // Get team members
@@ -54,16 +66,23 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     if (memberIds.length === 0) {
       // Team has no members, return empty stats
-      return NextResponse.json({
-        success: true,
-        data: {
-          totalEntries: 0,
-          totalEvaluations: 0,
-          avgScore: 0,
-          completionRate: 0,
-          memberCount: 0,
+      return NextResponse.json(
+        {
+          success: true,
+          data: {
+            totalEntries: 0,
+            totalEvaluations: 0,
+            avgScore: 0,
+            completionRate: 0,
+            memberCount: 0,
+          },
         },
-      });
+        {
+          headers: {
+            "X-Request-ID": context.requestId || "",
+          },
+        }
+      );
     }
 
     // Get total entries by team members
@@ -72,41 +91,42 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         totalEntries: count(entries.id),
       })
       .from(entries)
-      .where(sql`${entries.userId} IN ${memberIds}`);
+      .where(inArray(entries.employeeId, memberIds));
 
     // Get evaluation statistics
     const [evalStats] = await db
       .select({
-        totalEvaluations: count(evaluations.id),
-        avgScore: avg(evaluations.totalScore),
+        totalEvaluations: count(qualityEvaluations.id),
+        avgScore: avg(qualityEvaluations.totalScore),
       })
-      .from(evaluations)
-      .innerJoin(entries, eq(entries.id, evaluations.entryId))
-      .where(sql`${entries.userId} IN ${memberIds}`);
+      .from(qualityEvaluations)
+      .innerJoin(entries, eq(entries.id, qualityEvaluations.entryId))
+      .where(inArray(entries.employeeId, memberIds));
 
     // Calculate completion rate (entries with evaluations / total entries)
-    const totalEntries = entryStats?.totalEntries || 0;
-    const totalEvaluations = evalStats?.totalEvaluations || 0;
+    const totalEntries = Number(entryStats?.totalEntries || 0);
+    const totalEvaluations = Number(evalStats?.totalEvaluations || 0);
     const completionRate =
       totalEntries > 0 ? (totalEvaluations / totalEntries) * 100 : 0;
 
     const stats = {
-      totalEntries: totalEntries,
-      totalEvaluations: totalEvaluations,
+      totalEntries,
+      totalEvaluations,
       avgScore: evalStats?.avgScore ? Number(evalStats.avgScore) : 0,
-      completionRate: completionRate,
+      completionRate: Math.round(completionRate * 100) / 100, // Round to 2 decimals
       memberCount: memberIds.length,
     };
 
-    return NextResponse.json({
-      success: true,
-      data: stats,
-    });
-  } catch (error) {
-    console.error("Error fetching team stats:", error);
     return NextResponse.json(
-      { error: "Failed to fetch team statistics" },
-      { status: 500 }
+      {
+        success: true,
+        data: stats,
+      },
+      {
+        headers: {
+          "X-Request-ID": context.requestId || "",
+        },
+      }
     );
   }
-}
+);

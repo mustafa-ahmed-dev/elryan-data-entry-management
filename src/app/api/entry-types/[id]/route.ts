@@ -12,30 +12,37 @@ import { checkPermission } from "@/db/utils/permissions";
 import { db } from "@/db";
 import { entryTypes, entries } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
+import {
+  ApiErrors,
+  withErrorHandling,
+  getRequestContext,
+} from "@/lib/api/errors";
 
 interface RouteParams {
   params: { id: string };
 }
 
 // GET /api/entry-types/[id]
-export async function GET(request: NextRequest, { params }: RouteParams) {
-  try {
+export const GET = withErrorHandling(
+  async (request: NextRequest, { params }: RouteParams) => {
+    const context = await getRequestContext(request);
+
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return ApiErrors.unauthorized(context);
     }
+
+    context.userId = session.user.id;
+    context.userEmail = session.user.email;
 
     const canRead = await checkPermission(session.user.id, "entries", "read");
     if (!canRead) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return ApiErrors.insufficientPermissions(context, "entries:read");
     }
 
     const entryTypeId = parseInt(params.id);
     if (isNaN(entryTypeId)) {
-      return NextResponse.json(
-        { error: "Invalid entry type ID" },
-        { status: 400 }
-      );
+      return ApiErrors.invalidId(context, "Entry type");
     }
 
     const [entryType] = await db
@@ -45,32 +52,35 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       .limit(1);
 
     if (!entryType) {
-      return NextResponse.json(
-        { error: "Entry type not found" },
-        { status: 404 }
-      );
+      return ApiErrors.notFound(context, "Entry type");
     }
 
-    return NextResponse.json({
-      success: true,
-      data: entryType,
-    });
-  } catch (error) {
-    console.error("Error fetching entry type:", error);
     return NextResponse.json(
-      { error: "Failed to fetch entry type" },
-      { status: 500 }
+      {
+        success: true,
+        data: entryType,
+      },
+      {
+        headers: {
+          "X-Request-ID": context.requestId || "",
+        },
+      }
     );
   }
-}
+);
 
 // PATCH /api/entry-types/[id]
-export async function PATCH(request: NextRequest, { params }: RouteParams) {
-  try {
+export const PATCH = withErrorHandling(
+  async (request: NextRequest, { params }: RouteParams) => {
+    const context = await getRequestContext(request);
+
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return ApiErrors.unauthorized(context);
     }
+
+    context.userId = session.user.id;
+    context.userEmail = session.user.email;
 
     const canUpdate = await checkPermission(
       session.user.id,
@@ -79,70 +89,82 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       "all"
     );
     if (!canUpdate) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return ApiErrors.insufficientPermissions(context, "entries:update:all");
     }
 
     const entryTypeId = parseInt(params.id);
     if (isNaN(entryTypeId)) {
-      return NextResponse.json(
-        { error: "Invalid entry type ID" },
-        { status: 400 }
-      );
+      return ApiErrors.invalidId(context, "Entry type");
     }
 
     const body = await request.json();
 
     // Build update object
     const updateData: any = {};
-    if (body.name) updateData.name = body.name;
-    if (body.description !== undefined)
+
+    if (body.name !== undefined) {
+      if (typeof body.name !== "string" || body.name.trim().length === 0) {
+        return ApiErrors.invalidInput(
+          context,
+          "Name must be a non-empty string",
+          "name"
+        );
+      }
+      updateData.name = body.name.trim();
+    }
+
+    if (body.description !== undefined) {
       updateData.description = body.description;
+    }
 
     if (Object.keys(updateData).length === 0) {
-      return NextResponse.json(
-        { error: "No fields to update" },
-        { status: 400 }
-      );
+      return ApiErrors.invalidInput(context, "No valid fields to update");
     }
 
-    const [updated] = await db
-      .update(entryTypes)
-      .set(updateData)
-      .where(eq(entryTypes.id, entryTypeId))
-      .returning();
+    try {
+      const [updated] = await db
+        .update(entryTypes)
+        .set(updateData)
+        .where(eq(entryTypes.id, entryTypeId))
+        .returning();
 
-    if (!updated) {
+      if (!updated) {
+        return ApiErrors.notFound(context, "Entry type");
+      }
+
       return NextResponse.json(
-        { error: "Entry type not found" },
-        { status: 404 }
+        {
+          success: true,
+          data: updated,
+          message: "Entry type updated successfully",
+        },
+        {
+          headers: {
+            "X-Request-ID": context.requestId || "",
+          },
+        }
       );
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("duplicate")) {
+        return ApiErrors.duplicateEntry(context, "name");
+      }
+      throw error;
     }
-
-    return NextResponse.json({
-      success: true,
-      data: updated,
-    });
-  } catch (error) {
-    console.error("Error updating entry type:", error);
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to update entry type",
-      },
-      { status: 500 }
-    );
   }
-}
+);
 
 // DELETE /api/entry-types/[id]
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  try {
+export const DELETE = withErrorHandling(
+  async (request: NextRequest, { params }: RouteParams) => {
+    const context = await getRequestContext(request);
+
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return ApiErrors.unauthorized(context);
     }
+
+    context.userId = session.user.id;
+    context.userEmail = session.user.email;
 
     const canDelete = await checkPermission(
       session.user.id,
@@ -151,15 +173,12 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       "all"
     );
     if (!canDelete) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return ApiErrors.insufficientPermissions(context, "entries:delete:all");
     }
 
     const entryTypeId = parseInt(params.id);
     if (isNaN(entryTypeId)) {
-      return NextResponse.json(
-        { error: "Invalid entry type ID" },
-        { status: 400 }
-      );
+      return ApiErrors.invalidId(context, "Entry type");
     }
 
     // Check if entry type has been used in entries
@@ -168,13 +187,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       .from(entries)
       .where(eq(entries.entryTypeId, entryTypeId));
 
-    if (Number(entryCount.count) > 0) {
-      return NextResponse.json(
-        {
-          error: `Cannot delete entry type that has been used in ${entryCount.count} entry(ies). This maintains data integrity.`,
-        },
-        { status: 400 }
-      );
+    const count = Number(entryCount.count);
+    if (count > 0) {
+      return ApiErrors.cannotDeleteInUse(context, "Entry type", count);
     }
 
     const [deleted] = await db
@@ -183,26 +198,20 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       .returning();
 
     if (!deleted) {
-      return NextResponse.json(
-        { error: "Entry type not found" },
-        { status: 404 }
-      );
+      return ApiErrors.notFound(context, "Entry type");
     }
 
-    return NextResponse.json({
-      success: true,
-      message: "Entry type deleted successfully",
-    });
-  } catch (error) {
-    console.error("Error deleting entry type:", error);
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to delete entry type",
+        success: true,
+        message: "Entry type deleted successfully",
+        data: { id: entryTypeId },
       },
-      { status: 500 }
+      {
+        headers: {
+          "X-Request-ID": context.requestId || "",
+        },
+      }
     );
   }
-}
+);

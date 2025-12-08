@@ -1,5 +1,5 @@
 /**
- * Rule Sets API Routes
+ * Rule Sets API Routes - WITH ENHANCED ERROR HANDLING
  * GET /api/rule-sets - List all rule sets
  * POST /api/rule-sets - Create new rule set
  */
@@ -11,96 +11,131 @@ import { checkPermission } from "@/db/utils/permissions";
 import { db } from "@/db";
 import { evaluationRuleSets } from "@/db/schema";
 import { desc } from "drizzle-orm";
+import {
+  ApiErrors,
+  withErrorHandling,
+  getRequestContext,
+} from "@/lib/api/errors";
 
 // GET /api/rule-sets - List all rule sets
-export async function GET(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+export const GET = withErrorHandling(async (request: NextRequest) => {
+  // Get context FIRST
+  const context = await getRequestContext(request);
 
-    // Check permission (admin only for settings)
-    const canRead = await checkPermission(
-      session.user.id,
-      "evaluations",
-      "read"
-    );
-    if (!canRead) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return ApiErrors.unauthorized(context);
+  }
 
-    // Get all rule sets
-    const ruleSets = await db
-      .select()
-      .from(evaluationRuleSets)
-      .orderBy(desc(evaluationRuleSets.createdAt));
+  // Add user info to context
+  context.userId = session.user.id;
+  context.userEmail = session.user.email;
 
-    return NextResponse.json({
+  // Check permission (admin only for settings)
+  const canRead = await checkPermission(session.user.id, "evaluations", "read");
+  if (!canRead) {
+    return ApiErrors.insufficientPermissions(context, "evaluations:read");
+  }
+
+  // Get all rule sets
+  const ruleSets = await db
+    .select()
+    .from(evaluationRuleSets)
+    .orderBy(desc(evaluationRuleSets.createdAt));
+
+  return NextResponse.json(
+    {
       success: true,
       data: ruleSets,
-    });
-  } catch (error) {
-    console.error("Error fetching rule sets:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch rule sets" },
-      { status: 500 }
-    );
-  }
-}
+    },
+    {
+      headers: {
+        "X-Request-ID": context.requestId || "",
+      },
+    }
+  );
+});
 
 // POST /api/rule-sets - Create new rule set
-export async function POST(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+export const POST = withErrorHandling(async (request: NextRequest) => {
+  // Get context FIRST
+  const context = await getRequestContext(request);
 
-    // Check permission (admin only)
-    const canCreate = await checkPermission(
-      session.user.id,
-      "evaluations",
-      "create",
-      "all"
-    );
-    if (!canCreate) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return ApiErrors.unauthorized(context);
+  }
 
-    const body = await request.json();
+  // Add user info to context
+  context.userId = session.user.id;
+  context.userEmail = session.user.email;
 
-    // Validate required fields
-    if (!body.name || !body.version) {
-      return NextResponse.json(
-        { error: "Name and version are required" },
-        { status: 400 }
-      );
-    }
+  // Check permission (admin only)
+  const canCreate = await checkPermission(
+    session.user.id,
+    "evaluations",
+    "create",
+    "all"
+  );
+  if (!canCreate) {
+    return ApiErrors.insufficientPermissions(context, "evaluations:create:all");
+  }
 
-    // Create rule set (default to inactive)
-    const [ruleSet] = await db
-      .insert(evaluationRuleSets)
-      .values({
-        name: body.name,
-        description: body.description || null,
-        isActive: false, // New rule sets start as inactive
-        version: body.version,
-      })
-      .returning();
+  const body = await request.json();
 
-    return NextResponse.json({
-      success: true,
-      data: ruleSet,
-    });
-  } catch (error) {
-    console.error("Error creating rule set:", error);
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Failed to create rule set",
-      },
-      { status: 500 }
+  // Validate required fields
+  if (!body.name) {
+    return ApiErrors.missingField(context, "name");
+  }
+
+  if (!body.version) {
+    return ApiErrors.missingField(context, "version");
+  }
+
+  // Validate name length
+  if (body.name.trim().length === 0) {
+    return ApiErrors.invalidInput(context, "Name cannot be empty", "name");
+  }
+
+  if (body.name.length > 100) {
+    return ApiErrors.invalidInput(
+      context,
+      "Name must be 100 characters or less",
+      "name"
     );
   }
-}
+
+  // Validate version format
+  if (typeof body.version !== "string" || body.version.trim().length === 0) {
+    return ApiErrors.invalidInput(
+      context,
+      "Version must be a non-empty string",
+      "version"
+    );
+  }
+
+  // Create rule set (default to inactive)
+  const [ruleSet] = await db
+    .insert(evaluationRuleSets)
+    .values({
+      name: body.name,
+      description: body.description || null,
+      isActive: false, // New rule sets start as inactive
+      version: body.version,
+    })
+    .returning();
+
+  return NextResponse.json(
+    {
+      success: true,
+      data: ruleSet,
+      message: "Rule set created successfully",
+    },
+    {
+      status: 201,
+      headers: {
+        "X-Request-ID": context.requestId || "",
+      },
+    }
+  );
+});

@@ -1,5 +1,5 @@
 /**
- * Rule Set Detail API Routes
+ * Rule Set Detail API Routes - WITH ENHANCED ERROR HANDLING
  * GET /api/rule-sets/[id] - Get rule set with rules
  * PATCH /api/rule-sets/[id] - Update rule set
  * DELETE /api/rule-sets/[id] - Delete rule set
@@ -16,18 +16,30 @@ import {
   qualityEvaluations,
 } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
+import {
+  ApiErrors,
+  withErrorHandling,
+  getRequestContext,
+} from "@/lib/api/errors";
 
 interface RouteParams {
   params: { id: string };
 }
 
 // GET /api/rule-sets/[id] - Get rule set with rules
-export async function GET(request: NextRequest, { params }: RouteParams) {
-  try {
+export const GET = withErrorHandling(
+  async (request: NextRequest, { params }: RouteParams) => {
+    // Get context FIRST
+    const context = await getRequestContext(request);
+
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return ApiErrors.unauthorized(context);
     }
+
+    // Add user info to context
+    context.userId = session.user.id;
+    context.userEmail = session.user.email;
 
     const canRead = await checkPermission(
       session.user.id,
@@ -35,15 +47,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       "read"
     );
     if (!canRead) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return ApiErrors.insufficientPermissions(context, "evaluations:read");
     }
 
     const ruleSetId = parseInt(params.id);
     if (isNaN(ruleSetId)) {
-      return NextResponse.json(
-        { error: "Invalid rule set ID" },
-        { status: 400 }
-      );
+      return ApiErrors.invalidId(context, "Rule set");
     }
 
     // Get rule set
@@ -54,10 +63,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       .limit(1);
 
     if (!ruleSet) {
-      return NextResponse.json(
-        { error: "Rule set not found" },
-        { status: 404 }
-      );
+      return ApiErrors.notFound(context, "Rule set");
     }
 
     // Get rules for this rule set
@@ -66,29 +72,37 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       .from(evaluationRules)
       .where(eq(evaluationRules.ruleSetId, ruleSetId));
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        ...ruleSet,
-        rules,
-      },
-    });
-  } catch (error) {
-    console.error("Error fetching rule set:", error);
     return NextResponse.json(
-      { error: "Failed to fetch rule set" },
-      { status: 500 }
+      {
+        success: true,
+        data: {
+          ...ruleSet,
+          rules,
+        },
+      },
+      {
+        headers: {
+          "X-Request-ID": context.requestId || "",
+        },
+      }
     );
   }
-}
+);
 
 // PATCH /api/rule-sets/[id] - Update rule set
-export async function PATCH(request: NextRequest, { params }: RouteParams) {
-  try {
+export const PATCH = withErrorHandling(
+  async (request: NextRequest, { params }: RouteParams) => {
+    // Get context FIRST
+    const context = await getRequestContext(request);
+
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return ApiErrors.unauthorized(context);
     }
+
+    // Add user info to context
+    context.userId = session.user.id;
+    context.userEmail = session.user.email;
 
     const canUpdate = await checkPermission(
       session.user.id,
@@ -97,25 +111,54 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       "all"
     );
     if (!canUpdate) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return ApiErrors.insufficientPermissions(
+        context,
+        "evaluations:update:all"
+      );
     }
 
     const ruleSetId = parseInt(params.id);
     if (isNaN(ruleSetId)) {
-      return NextResponse.json(
-        { error: "Invalid rule set ID" },
-        { status: 400 }
-      );
+      return ApiErrors.invalidId(context, "Rule set");
     }
 
     const body = await request.json();
 
     // Validate at least one field
     if (!body.name && !body.description && body.version === undefined) {
-      return NextResponse.json(
-        { error: "No fields to update" },
-        { status: 400 }
+      return ApiErrors.invalidInput(
+        context,
+        "At least one field must be provided for update"
       );
+    }
+
+    // Validate name if provided
+    if (body.name !== undefined) {
+      if (typeof body.name !== "string" || body.name.trim().length === 0) {
+        return ApiErrors.invalidInput(context, "Name cannot be empty", "name");
+      }
+
+      if (body.name.length > 100) {
+        return ApiErrors.invalidInput(
+          context,
+          "Name must be 100 characters or less",
+          "name"
+        );
+      }
+    }
+
+    // Validate version if provided
+    if (body.version !== undefined) {
+      if (
+        typeof body.version !== "string" ||
+        body.version.trim().length === 0
+      ) {
+        return ApiErrors.invalidInput(
+          context,
+          "Version must be a non-empty string",
+          "version"
+        );
+      }
     }
 
     // Update rule set
@@ -132,35 +175,38 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       .returning();
 
     if (!updated) {
-      return NextResponse.json(
-        { error: "Rule set not found" },
-        { status: 404 }
-      );
+      return ApiErrors.notFound(context, "Rule set");
     }
 
-    return NextResponse.json({
-      success: true,
-      data: updated,
-    });
-  } catch (error) {
-    console.error("Error updating rule set:", error);
     return NextResponse.json(
       {
-        error:
-          error instanceof Error ? error.message : "Failed to update rule set",
+        success: true,
+        data: updated,
+        message: "Rule set updated successfully",
       },
-      { status: 500 }
+      {
+        headers: {
+          "X-Request-ID": context.requestId || "",
+        },
+      }
     );
   }
-}
+);
 
 // DELETE /api/rule-sets/[id] - Delete rule set
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  try {
+export const DELETE = withErrorHandling(
+  async (request: NextRequest, { params }: RouteParams) => {
+    // Get context FIRST
+    const context = await getRequestContext(request);
+
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return ApiErrors.unauthorized(context);
     }
+
+    // Add user info to context
+    context.userId = session.user.id;
+    context.userEmail = session.user.email;
 
     const canDelete = await checkPermission(
       session.user.id,
@@ -169,18 +215,18 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       "all"
     );
     if (!canDelete) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return ApiErrors.insufficientPermissions(
+        context,
+        "evaluations:delete:all"
+      );
     }
 
     const ruleSetId = parseInt(params.id);
     if (isNaN(ruleSetId)) {
-      return NextResponse.json(
-        { error: "Invalid rule set ID" },
-        { status: 400 }
-      );
+      return ApiErrors.invalidId(context, "Rule set");
     }
 
-    // Check if rule set is active
+    // Check if rule set exists
     const [ruleSet] = await db
       .select()
       .from(evaluationRuleSets)
@@ -188,16 +234,14 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       .limit(1);
 
     if (!ruleSet) {
-      return NextResponse.json(
-        { error: "Rule set not found" },
-        { status: 404 }
-      );
+      return ApiErrors.notFound(context, "Rule set");
     }
 
+    // Check if rule set is active
     if (ruleSet.isActive) {
-      return NextResponse.json(
-        { error: "Cannot delete active rule set. Deactivate it first." },
-        { status: 400 }
+      return ApiErrors.businessRuleViolation(
+        context,
+        "Cannot delete active rule set. Deactivate it first."
       );
     }
 
@@ -207,13 +251,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       .from(qualityEvaluations)
       .where(eq(qualityEvaluations.ruleSetId, ruleSetId));
 
-    if (Number(evaluationCount.count) > 0) {
-      return NextResponse.json(
-        {
-          error: `Cannot delete rule set that has been used in ${evaluationCount.count} evaluation(s). This maintains data integrity.`,
-        },
-        { status: 400 }
-      );
+    const count = Number(evaluationCount.count);
+    if (count > 0) {
+      return ApiErrors.cannotDeleteInUse(context, "rule set", count);
     }
 
     // Delete associated rules first
@@ -226,18 +266,16 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       .delete(evaluationRuleSets)
       .where(eq(evaluationRuleSets.id, ruleSetId));
 
-    return NextResponse.json({
-      success: true,
-      message: "Rule set deleted successfully",
-    });
-  } catch (error) {
-    console.error("Error deleting rule set:", error);
     return NextResponse.json(
       {
-        error:
-          error instanceof Error ? error.message : "Failed to delete rule set",
+        success: true,
+        message: "Rule set deleted successfully",
       },
-      { status: 500 }
+      {
+        headers: {
+          "X-Request-ID": context.requestId || "",
+        },
+      }
     );
   }
-}
+);

@@ -1,3 +1,4 @@
+// src/app/api/schedules/route.ts
 /**
  * Schedules API Routes
  * GET /api/schedules - List schedules
@@ -8,158 +9,200 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { checkPermission, getUserPermissions } from "@/db/utils/permissions";
+import { getSchedules, createSchedule } from "@/db/utils/schedules";
 import {
-  getSchedules,
-  createSchedule,
-  getPendingSchedules,
-} from "@/db/utils/schedules";
+  ApiErrors,
+  withErrorHandling,
+  getRequestContext,
+} from "@/lib/api/errors";
 
 // GET /api/schedules - List schedules
-export async function GET(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+export const GET = withErrorHandling(async (request: NextRequest) => {
+  const context = await getRequestContext(request);
 
-    // Check permission
-    const canRead = await checkPermission(session.user.id, "schedules", "read");
-    if (!canRead) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return ApiErrors.unauthorized(context);
+  }
 
-    // Get user permissions
-    const userPerms = await getUserPermissions(session.user.id);
-    if (!userPerms) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+  context.userId = session.user.id;
+  context.userEmail = session.user.email;
 
-    // Get query parameters
-    const searchParams = request.nextUrl.searchParams;
-    const userId = searchParams.get("userId");
-    const teamId = searchParams.get("teamId");
-    const status = searchParams.get("status") as any;
-    const weekStartDate = searchParams.get("weekStartDate") || undefined;
-    const page = parseInt(searchParams.get("page") || "1");
-    const pageSize = parseInt(searchParams.get("pageSize") || "10");
-    const pendingOnly = searchParams.get("pending") === "true";
+  const canRead = await checkPermission(session.user.id, "schedules", "read");
+  if (!canRead) {
+    return ApiErrors.insufficientPermissions(context, "schedules:read");
+  }
 
-    // If requesting pending schedules
-    if (pendingOnly) {
-      const canApprove = await checkPermission(
-        session.user.id,
-        "schedules",
-        "approve"
-      );
-      if (!canApprove) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
+  const userPerms = await getUserPermissions(session.user.id);
+  if (!userPerms) {
+    return ApiErrors.forbidden(context);
+  }
 
-      const pending = await getPendingSchedules();
-      return NextResponse.json({
-        success: true,
-        data: pending,
-      });
-    }
+  // Get query parameters
+  const searchParams = request.nextUrl.searchParams;
+  const userId = searchParams.get("userId");
+  const teamId = searchParams.get("teamId");
+  const status = searchParams.get("status") as any;
+  const weekStartDate = searchParams.get("weekStartDate") || undefined;
+  const page = parseInt(searchParams.get("page") || "1");
+  const pageSize = parseInt(searchParams.get("pageSize") || "20");
 
-    // Build filters based on permission scope
-    const filters: any = {
-      page,
-      pageSize,
-      status,
-      weekStartDate,
-    };
-
-    const readPermission = userPerms.permissions.find(
-      (p) => p.resource === "schedules" && p.action === "read"
-    );
-
-    if (readPermission?.scope === "own") {
-      // Employee: only their own schedules
-      filters.userId = session.user.id;
-    } else if (readPermission?.scope === "team") {
-      // Team leader: their team's schedules
-      if (userPerms.teamId) {
-        filters.teamId = userPerms.teamId;
-      }
-      if (userId) {
-        filters.userId = parseInt(userId);
-      }
-    } else if (readPermission?.scope === "all") {
-      // Admin: all schedules
-      if (userId) filters.userId = parseInt(userId);
-      if (teamId) filters.teamId = parseInt(teamId);
-    }
-
-    const result = await getSchedules(filters);
-
-    return NextResponse.json({
-      success: true,
-      ...result,
-    });
-  } catch (error) {
-    console.error("Error fetching schedules:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch schedules" },
-      { status: 500 }
+  // Validate pagination
+  if (page < 1) {
+    return ApiErrors.invalidInput(context, "Page must be >= 1", "page");
+  }
+  if (pageSize < 1 || pageSize > 100) {
+    return ApiErrors.invalidInput(
+      context,
+      "Page size must be between 1 and 100",
+      "pageSize"
     );
   }
-}
+
+  // Build filters
+  const filters: any = {
+    page,
+    pageSize,
+    weekStartDate,
+    status,
+  };
+
+  if (userId) {
+    const uid = parseInt(userId);
+    if (isNaN(uid)) {
+      return ApiErrors.invalidInput(context, "Invalid user ID", "userId");
+    }
+    filters.userId = uid;
+  }
+
+  if (teamId) {
+    const tid = parseInt(teamId);
+    if (isNaN(tid)) {
+      return ApiErrors.invalidInput(context, "Invalid team ID", "teamId");
+    }
+    filters.teamId = tid;
+  }
+
+  // Apply permission-based filtering
+  const readPermission = userPerms.permissions.find(
+    (p) => p.resource === "schedules" && p.action === "read"
+  );
+
+  if (readPermission?.scope === "own") {
+    filters.userId = session.user.id;
+  } else if (readPermission?.scope === "team") {
+    if (userPerms.teamId) {
+      filters.teamId = userPerms.teamId;
+    }
+  }
+
+  const result = await getSchedules(filters);
+
+  return NextResponse.json(
+    {
+      success: true,
+      data: result.schedules,
+      pagination: {
+        page: result.pagination.page,
+        pageSize: result.pagination.pageSize,
+        total: result.pagination.total,
+        totalPages: result.pagination.totalPages,
+      },
+    },
+    {
+      headers: {
+        "X-Request-ID": context.requestId || "",
+      },
+    }
+  );
+});
 
 // POST /api/schedules - Create schedule
-export async function POST(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+export const POST = withErrorHandling(async (request: NextRequest) => {
+  const context = await getRequestContext(request);
 
-    // Check permission
-    const canCreate = await checkPermission(
-      session.user.id,
-      "schedules",
-      "create"
-    );
-    if (!canCreate) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return ApiErrors.unauthorized(context);
+  }
 
-    const body = await request.json();
+  context.userId = session.user.id;
+  context.userEmail = session.user.email;
 
-    // Validate required fields
-    if (
-      !body.userId ||
-      !body.weekStartDate ||
-      !body.weekEndDate ||
-      !body.scheduleData
-    ) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      );
-    }
+  const canCreate = await checkPermission(
+    session.user.id,
+    "schedules",
+    "create"
+  );
+  if (!canCreate) {
+    return ApiErrors.insufficientPermissions(context, "schedules:create");
+  }
 
-    // Create schedule
-    const schedule = await createSchedule({
-      userId: body.userId,
-      weekStartDate: body.weekStartDate,
-      weekEndDate: body.weekEndDate,
-      scheduleData: body.scheduleData,
-      createdBy: session.user.id,
-    });
+  const body = await request.json();
 
-    return NextResponse.json({
-      success: true,
-      data: schedule,
-    });
-  } catch (error) {
-    console.error("Error creating schedule:", error);
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Failed to create schedule",
-      },
-      { status: 500 }
+  // Validate required fields
+  if (!body.userId) {
+    return ApiErrors.missingField(context, "userId");
+  }
+  if (!body.weekStartDate) {
+    return ApiErrors.missingField(context, "weekStartDate");
+  }
+  if (!body.weekEndDate) {
+    return ApiErrors.missingField(context, "weekEndDate");
+  }
+  if (!body.scheduleData) {
+    return ApiErrors.missingField(context, "scheduleData");
+  }
+
+  // Validate user ID
+  const userId = parseInt(body.userId);
+  if (isNaN(userId)) {
+    return ApiErrors.invalidInput(
+      context,
+      "User ID must be a number",
+      "userId"
     );
   }
-}
+
+  // Validate date range
+  const startDate = new Date(body.weekStartDate);
+  const endDate = new Date(body.weekEndDate);
+  if (startDate > endDate) {
+    return ApiErrors.invalidDateRange(context);
+  }
+
+  // Check permission scope
+  const userPerms = await getUserPermissions(session.user.id);
+  const createPermission = userPerms?.permissions.find(
+    (p) => p.resource === "schedules" && p.action === "create"
+  );
+
+  if (createPermission?.scope === "own" && userId !== session.user.id) {
+    return ApiErrors.businessRuleViolation(
+      context,
+      "You can only create schedules for yourself"
+    );
+  }
+
+  const schedule = await createSchedule({
+    userId,
+    weekStartDate: body.weekStartDate,
+    weekEndDate: body.weekEndDate,
+    scheduleData: body.scheduleData,
+    createdBy: session.user.id,
+  });
+
+  return NextResponse.json(
+    {
+      success: true,
+      data: schedule,
+      message: "Schedule created successfully",
+    },
+    {
+      status: 201,
+      headers: {
+        "X-Request-ID": context.requestId || "",
+      },
+    }
+  );
+});

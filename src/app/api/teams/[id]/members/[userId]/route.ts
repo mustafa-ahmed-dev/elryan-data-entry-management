@@ -1,5 +1,5 @@
 /**
- * Remove Team Member API
+ * Remove Team Member API - WITH ENHANCED ERROR HANDLING
  * DELETE /api/teams/[id]/members/[userId] - Remove user from team
  */
 
@@ -8,18 +8,30 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { checkPermission } from "@/db/utils/permissions";
 import { removeUsersFromTeam } from "@/db/utils/teams";
+import {
+  ApiErrors,
+  withErrorHandling,
+  getRequestContext,
+} from "@/lib/api/errors";
 
 interface RouteParams {
   params: { id: string; userId: string };
 }
 
 // DELETE /api/teams/[id]/members/[userId]
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  try {
+export const DELETE = withErrorHandling(
+  async (request: NextRequest, { params }: RouteParams) => {
+    // Get context FIRST
+    const context = await getRequestContext(request);
+
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return ApiErrors.unauthorized(context);
     }
+
+    // Add user info to context
+    context.userId = session.user.id;
+    context.userEmail = session.user.email;
 
     const canUpdate = await checkPermission(
       session.user.id,
@@ -28,21 +40,33 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       "all"
     );
     if (!canUpdate) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return ApiErrors.insufficientPermissions(context, "teams:update:all");
     }
 
+    // Validate team ID
+    const teamId = parseInt(params.id);
+    if (isNaN(teamId)) {
+      return ApiErrors.invalidId(context, "Team");
+    }
+
+    // Validate user ID
     const userId = parseInt(params.userId);
+    if (isNaN(userId)) {
+      return ApiErrors.invalidId(context, "User");
+    }
+
     await removeUsersFromTeam([userId]);
 
-    return NextResponse.json({
-      success: true,
-      message: "User removed from team successfully",
-    });
-  } catch (error) {
-    console.error("Error removing user from team:", error);
     return NextResponse.json(
-      { error: "Failed to remove user from team" },
-      { status: 500 }
+      {
+        success: true,
+        message: "User removed from team successfully",
+      },
+      {
+        headers: {
+          "X-Request-ID": context.requestId || "",
+        },
+      }
     );
   }
-}
+);

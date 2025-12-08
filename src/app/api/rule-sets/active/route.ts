@@ -1,5 +1,5 @@
 /**
- * Get Active Rule Set API
+ * Get Active Rule Set API - WITH ENHANCED ERROR HANDLING
  * GET /api/rule-sets/active - Get the currently active rule set
  */
 
@@ -10,50 +10,54 @@ import { checkPermission } from "@/db/utils/permissions";
 import { db } from "@/db";
 import { evaluationRuleSets } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import {
+  ApiErrors,
+  withErrorHandling,
+  getRequestContext,
+} from "@/lib/api/errors";
 
 // GET /api/rule-sets/active
-export async function GET(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+export const GET = withErrorHandling(async (request: NextRequest) => {
+  // Get context FIRST
+  const context = await getRequestContext(request);
 
-    const canRead = await checkPermission(
-      session.user.id,
-      "evaluations",
-      "read"
-    );
-    if (!canRead) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return ApiErrors.unauthorized(context);
+  }
 
-    // Get active rule set
-    const [activeRuleSet] = await db
-      .select()
-      .from(evaluationRuleSets)
-      .where(eq(evaluationRuleSets.isActive, true))
-      .limit(1);
+  // Add user info to context
+  context.userId = session.user.id;
+  context.userEmail = session.user.email;
 
-    if (!activeRuleSet) {
-      return NextResponse.json(
-        {
-          error:
-            "No active rule set found. Please activate a rule set in settings.",
-        },
-        { status: 404 }
-      );
-    }
+  const canRead = await checkPermission(session.user.id, "evaluations", "read");
+  if (!canRead) {
+    return ApiErrors.insufficientPermissions(context, "evaluations:read");
+  }
 
-    return NextResponse.json({
-      success: true,
-      data: activeRuleSet,
-    });
-  } catch (error) {
-    console.error("Error fetching active rule set:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch active rule set" },
-      { status: 500 }
+  // Get active rule set
+  const [activeRuleSet] = await db
+    .select()
+    .from(evaluationRuleSets)
+    .where(eq(evaluationRuleSets.isActive, true))
+    .limit(1);
+
+  if (!activeRuleSet) {
+    return ApiErrors.notFound(
+      context,
+      "No active rule set found. Please activate a rule set in settings."
     );
   }
-}
+
+  return NextResponse.json(
+    {
+      success: true,
+      data: activeRuleSet,
+    },
+    {
+      headers: {
+        "X-Request-ID": context.requestId || "",
+      },
+    }
+  );
+});

@@ -1,118 +1,241 @@
+// src/app/api/users/route.ts
 /**
  * Users API Routes
- * GET /api/users - List users with filters
- * POST /api/users - Create user
+ * GET /api/users - List users with pagination
+ * POST /api/users - Create new user
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
-import { checkPermission } from "@/db/utils/permissions";
+import { checkPermission, getUserPermissions } from "@/db/utils/permissions";
 import { getUsers, createUser } from "@/db/utils/users";
 import { hash } from "argon2";
+import {
+  ApiErrors,
+  withErrorHandling,
+  getRequestContext,
+} from "@/lib/api/errors";
 
-// GET /api/users - List users with filters
-export async function GET(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+// GET /api/users - List users
+export const GET = withErrorHandling(async (request: NextRequest) => {
+  const context = await getRequestContext(request);
 
-    // Check permission
-    const canRead = await checkPermission(session.user.id, "users", "read");
-    if (!canRead) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return ApiErrors.unauthorized(context);
+  }
 
-    // Get query parameters
-    const searchParams = request.nextUrl.searchParams;
-    const filters = {
-      search: searchParams.get("search") || undefined,
-      roleId: searchParams.get("roleId")
-        ? parseInt(searchParams.get("roleId")!)
-        : undefined,
-      teamId: searchParams.get("teamId")
-        ? parseInt(searchParams.get("teamId")!)
-        : undefined,
-      isActive: searchParams.get("isActive")
-        ? searchParams.get("isActive") === "true"
-        : undefined,
-      page: parseInt(searchParams.get("page") || "1"),
-      pageSize: parseInt(searchParams.get("pageSize") || "20"),
-    };
+  context.userId = session.user.id;
+  context.userEmail = session.user.email;
 
-    const result = await getUsers(filters);
+  const canRead = await checkPermission(session.user.id, "users", "read");
+  if (!canRead) {
+    return ApiErrors.insufficientPermissions(context, "users:read");
+  }
 
-    return NextResponse.json({
-      success: true,
-      ...result,
-    });
-  } catch (error) {
-    console.error("Error fetching users:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch users" },
-      { status: 500 }
+  // Get user permissions to determine scope
+  const userPerms = await getUserPermissions(session.user.id);
+  if (!userPerms) {
+    return ApiErrors.forbidden(context);
+  }
+
+  // Get query parameters
+  const searchParams = request.nextUrl.searchParams;
+  const page = parseInt(searchParams.get("page") || "1");
+  const pageSize = parseInt(searchParams.get("pageSize") || "20");
+  const search = searchParams.get("search") || undefined;
+  const roleId = searchParams.get("roleId");
+  const teamId = searchParams.get("teamId");
+  const isActive = searchParams.get("isActive");
+
+  // Validate pagination
+  if (page < 1) {
+    return ApiErrors.invalidInput(context, "Page must be >= 1", "page");
+  }
+  if (pageSize < 1 || pageSize > 100) {
+    return ApiErrors.invalidInput(
+      context,
+      "Page size must be between 1 and 100",
+      "pageSize"
     );
   }
-}
+
+  // Build filters based on permission scope
+  const filters: any = {
+    page,
+    pageSize,
+    search,
+  };
+
+  if (roleId) {
+    const rid = parseInt(roleId);
+    if (isNaN(rid)) {
+      return ApiErrors.invalidInput(context, "Invalid role ID", "roleId");
+    }
+    filters.roleId = rid;
+  }
+
+  if (teamId) {
+    const tid = parseInt(teamId);
+    if (isNaN(tid)) {
+      return ApiErrors.invalidInput(context, "Invalid team ID", "teamId");
+    }
+    filters.teamId = tid;
+  }
+
+  if (isActive !== null && isActive !== undefined) {
+    filters.isActive = isActive === "true";
+  }
+
+  // Apply permission-based filtering
+  const readPermission = userPerms.permissions.find(
+    (p) => p.resource === "users" && p.action === "read"
+  );
+
+  if (readPermission?.scope === "team") {
+    if (userPerms.teamId) {
+      filters.teamId = userPerms.teamId;
+    }
+  } else if (readPermission?.scope === "own") {
+    filters.userId = session.user.id;
+  }
+
+  const result = await getUsers(filters);
+
+  return NextResponse.json(
+    {
+      success: true,
+      data: result.users,
+      pagination: {
+        page: result.pagination.page,
+        pageSize: result.pagination.pageSize,
+        total: result.pagination.total,
+        totalPages: result.pagination.totalPages,
+      },
+    },
+    {
+      headers: {
+        "X-Request-ID": context.requestId || "",
+      },
+    }
+  );
+});
 
 // POST /api/users - Create user
-export async function POST(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+export const POST = withErrorHandling(async (request: NextRequest) => {
+  const context = await getRequestContext(request);
 
-    // Check permission (admin only)
-    const canCreate = await checkPermission(
-      session.user.id,
-      "users",
-      "create",
-      "all"
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return ApiErrors.unauthorized(context);
+  }
+
+  context.userId = session.user.id;
+  context.userEmail = session.user.email;
+
+  const canCreate = await checkPermission(
+    session.user.id,
+    "users",
+    "create",
+    "all"
+  );
+  if (!canCreate) {
+    return ApiErrors.insufficientPermissions(context, "users:create:all");
+  }
+
+  const body = await request.json();
+
+  // Validate required fields
+  if (!body.fullName) {
+    return ApiErrors.missingField(context, "fullName");
+  }
+  if (!body.email) {
+    return ApiErrors.missingField(context, "email");
+  }
+  if (!body.password) {
+    return ApiErrors.missingField(context, "password");
+  }
+  if (!body.roleId) {
+    return ApiErrors.missingField(context, "roleId");
+  }
+
+  // Validate field types and formats
+  if (typeof body.fullName !== "string" || body.fullName.trim().length === 0) {
+    return ApiErrors.invalidInput(
+      context,
+      "Full name must be a non-empty string",
+      "fullName"
     );
-    if (!canCreate) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+  }
 
-    const body = await request.json();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(body.email)) {
+    return ApiErrors.invalidInput(context, "Invalid email format", "email");
+  }
 
-    // Validate required fields
-    if (!body.fullName || !body.email || !body.password || !body.roleId) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
+  if (typeof body.password !== "string" || body.password.length < 8) {
+    return ApiErrors.invalidInput(
+      context,
+      "Password must be at least 8 characters",
+      "password"
+    );
+  }
+
+  const roleId = parseInt(body.roleId);
+  if (isNaN(roleId)) {
+    return ApiErrors.invalidInput(
+      context,
+      "Role ID must be a number",
+      "roleId"
+    );
+  }
+
+  let teamId = null;
+  if (body.teamId !== undefined && body.teamId !== null) {
+    teamId = parseInt(body.teamId);
+    if (isNaN(teamId)) {
+      return ApiErrors.invalidInput(
+        context,
+        "Team ID must be a number",
+        "teamId"
       );
     }
+  }
 
+  try {
     // Hash password
     const passwordHash = await hash(body.password);
 
-    // Create user
     const user = await createUser({
-      fullName: body.fullName,
-      email: body.email,
-      password: passwordHash,
-      roleId: body.roleId,
-      teamId: body.teamId || null,
-      isActive: body.isActive !== undefined ? body.isActive : true,
+      fullName: body.fullName.trim(),
+      email: body.email.toLowerCase(),
+      passwordHash,
+      roleId,
+      teamId,
+      createdBy: session.user.id,
     });
 
     // Remove password hash from response
     const { passwordHash: _, ...userWithoutPassword } = user;
 
-    return NextResponse.json({
-      success: true,
-      data: userWithoutPassword,
-    });
-  } catch (error) {
-    console.error("Error creating user:", error);
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Failed to create user",
+        success: true,
+        data: userWithoutPassword,
+        message: "User created successfully",
       },
-      { status: 500 }
+      {
+        status: 201,
+        headers: {
+          "X-Request-ID": context.requestId || "",
+        },
+      }
     );
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("duplicate")) {
+      return ApiErrors.duplicateEntry(context, "email");
+    }
+    throw error; // Let withErrorHandling catch it
   }
-}
+});

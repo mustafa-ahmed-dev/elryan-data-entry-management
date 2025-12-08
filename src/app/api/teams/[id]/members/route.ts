@@ -1,5 +1,5 @@
 /**
- * Team Members API Routes
+ * Team Members API Routes - WITH ENHANCED ERROR HANDLING
  * GET /api/teams/[id]/members - Get team members
  * POST /api/teams/[id]/members - Assign users to team
  */
@@ -9,47 +9,71 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { checkPermission } from "@/db/utils/permissions";
 import { getTeamMembers, assignUsersToTeam } from "@/db/utils/teams";
+import {
+  ApiErrors,
+  withErrorHandling,
+  getRequestContext,
+} from "@/lib/api/errors";
 
 interface RouteParams {
   params: { id: string };
 }
 
 // GET /api/teams/[id]/members
-export async function GET(request: NextRequest, { params }: RouteParams) {
-  try {
+export const GET = withErrorHandling(
+  async (request: NextRequest, { params }: RouteParams) => {
+    // Get context FIRST
+    const context = await getRequestContext(request);
+
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return ApiErrors.unauthorized(context);
     }
+
+    // Add user info to context
+    context.userId = session.user.id;
+    context.userEmail = session.user.email;
 
     const canRead = await checkPermission(session.user.id, "teams", "read");
     if (!canRead) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return ApiErrors.insufficientPermissions(context, "teams:read");
     }
 
     const teamId = parseInt(params.id);
+    if (isNaN(teamId)) {
+      return ApiErrors.invalidId(context, "Team");
+    }
+
     const members = await getTeamMembers(teamId);
 
-    return NextResponse.json({
-      success: true,
-      data: members,
-    });
-  } catch (error) {
-    console.error("Error fetching team members:", error);
     return NextResponse.json(
-      { error: "Failed to fetch team members" },
-      { status: 500 }
+      {
+        success: true,
+        data: members,
+      },
+      {
+        headers: {
+          "X-Request-ID": context.requestId || "",
+        },
+      }
     );
   }
-}
+);
 
 // POST /api/teams/[id]/members - Assign users to team
-export async function POST(request: NextRequest, { params }: RouteParams) {
-  try {
+export const POST = withErrorHandling(
+  async (request: NextRequest, { params }: RouteParams) => {
+    // Get context FIRST
+    const context = await getRequestContext(request);
+
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return ApiErrors.unauthorized(context);
     }
+
+    // Add user info to context
+    context.userId = session.user.id;
+    context.userEmail = session.user.email;
 
     const canUpdate = await checkPermission(
       session.user.id,
@@ -58,33 +82,61 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       "all"
     );
     if (!canUpdate) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return ApiErrors.insufficientPermissions(context, "teams:update:all");
     }
 
     const teamId = parseInt(params.id);
+    if (isNaN(teamId)) {
+      return ApiErrors.invalidId(context, "Team");
+    }
+
     const body = await request.json();
 
-    if (!body.userIds || !Array.isArray(body.userIds)) {
-      return NextResponse.json(
-        { error: "userIds array is required" },
-        { status: 400 }
+    // Validate required fields
+    if (!body.userIds) {
+      return ApiErrors.missingField(context, "userIds");
+    }
+
+    if (!Array.isArray(body.userIds)) {
+      return ApiErrors.invalidInput(
+        context,
+        "userIds must be an array",
+        "userIds"
       );
+    }
+
+    if (body.userIds.length === 0) {
+      return ApiErrors.invalidInput(
+        context,
+        "userIds array cannot be empty",
+        "userIds"
+      );
+    }
+
+    // Validate all user IDs are numbers
+    for (let i = 0; i < body.userIds.length; i++) {
+      const userId = parseInt(body.userIds[i]);
+      if (isNaN(userId)) {
+        return ApiErrors.invalidInput(
+          context,
+          `Invalid user ID at index ${i}`,
+          `userIds[${i}]`
+        );
+      }
     }
 
     await assignUsersToTeam(teamId, body.userIds);
 
-    return NextResponse.json({
-      success: true,
-      message: "Users assigned to team successfully",
-    });
-  } catch (error) {
-    console.error("Error assigning users to team:", error);
     return NextResponse.json(
       {
-        error:
-          error instanceof Error ? error.message : "Failed to assign users",
+        success: true,
+        message: `${body.userIds.length} user(s) assigned to team successfully`,
       },
-      { status: 500 }
+      {
+        headers: {
+          "X-Request-ID": context.requestId || "",
+        },
+      }
     );
   }
-}
+);

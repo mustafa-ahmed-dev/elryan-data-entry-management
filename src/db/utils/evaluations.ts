@@ -381,3 +381,172 @@ export async function getTeamEvaluationStats(teamId: number) {
     lowestScore: Number(stats?.lowestScore || 0),
   };
 }
+
+// ============================================================================
+// REPORTS & ANALYTICS
+// ============================================================================
+
+/**
+ * Get general evaluation statistics with filters
+ */
+export async function getEvaluationStats(filters: {
+  employeeId?: number;
+  teamId?: number;
+  startDate?: string;
+  endDate?: string;
+}) {
+  const { employeeId, teamId, startDate, endDate } = filters;
+
+  // Build where conditions
+  const conditions = [];
+
+  if (employeeId !== undefined) {
+    conditions.push(eq(entries.employeeId, employeeId));
+  }
+
+  if (teamId !== undefined) {
+    conditions.push(eq(users.teamId, teamId));
+  }
+
+  if (startDate) {
+    conditions.push(gte(qualityEvaluations.evaluatedAt, new Date(startDate)));
+  }
+
+  if (endDate) {
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+    conditions.push(lte(qualityEvaluations.evaluatedAt, end));
+  }
+
+  const [stats] = await db
+    .select({
+      totalEvaluations: sql<number>`count(${qualityEvaluations.id})`,
+      averageScore: sql<number>`avg(${qualityEvaluations.totalScore})`,
+      highestScore: sql<number>`max(${qualityEvaluations.totalScore})`,
+      lowestScore: sql<number>`min(${qualityEvaluations.totalScore})`,
+    })
+    .from(qualityEvaluations)
+    .innerJoin(entries, eq(qualityEvaluations.entryId, entries.id))
+    .innerJoin(users, eq(entries.employeeId, users.id))
+    .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+  return {
+    totalEvaluations: Number(stats?.totalEvaluations || 0),
+    averageScore: Number(stats?.averageScore || 0),
+    highestScore: Number(stats?.highestScore || 0),
+    lowestScore: Number(stats?.lowestScore || 0),
+  };
+}
+
+/**
+ * Get quality trends over time (daily averages)
+ */
+export async function getQualityTrends(
+  startDate: string,
+  endDate: string,
+  filters: {
+    employeeId?: number;
+    teamId?: number;
+  } = {}
+) {
+  const { employeeId, teamId } = filters;
+
+  // Build where conditions
+  const conditions = [gte(qualityEvaluations.evaluatedAt, new Date(startDate))];
+
+  const end = new Date(endDate);
+  end.setHours(23, 59, 59, 999);
+  conditions.push(lte(qualityEvaluations.evaluatedAt, end));
+
+  if (employeeId !== undefined) {
+    conditions.push(eq(entries.employeeId, employeeId));
+  }
+
+  if (teamId !== undefined) {
+    conditions.push(eq(users.teamId, teamId));
+  }
+
+  const trends = await db
+    .select({
+      date: sql<string>`DATE(${qualityEvaluations.evaluatedAt})`,
+      averageScore: sql<number>`avg(${qualityEvaluations.totalScore})`,
+      totalEvaluations: sql<number>`count(${qualityEvaluations.id})`,
+      highestScore: sql<number>`max(${qualityEvaluations.totalScore})`,
+      lowestScore: sql<number>`min(${qualityEvaluations.totalScore})`,
+    })
+    .from(qualityEvaluations)
+    .innerJoin(entries, eq(qualityEvaluations.entryId, entries.id))
+    .innerJoin(users, eq(entries.employeeId, users.id))
+    .where(and(...conditions))
+    .groupBy(sql`DATE(${qualityEvaluations.evaluatedAt})`)
+    .orderBy(sql`DATE(${qualityEvaluations.evaluatedAt})`);
+
+  return trends.map((trend) => ({
+    date: trend.date,
+    averageScore: Number(trend.averageScore || 0),
+    totalEvaluations: Number(trend.totalEvaluations || 0),
+    highestScore: Number(trend.highestScore || 0),
+    lowestScore: Number(trend.lowestScore || 0),
+  }));
+}
+
+/**
+ * Get top performers by quality score
+ */
+export async function getTopPerformersByQuality(
+  limit: number,
+  filters: {
+    teamId?: number;
+    startDate?: string;
+    endDate?: string;
+  } = {}
+) {
+  const { teamId, startDate, endDate } = filters;
+
+  // Build where conditions
+  const conditions = [];
+
+  if (teamId !== undefined) {
+    conditions.push(eq(users.teamId, teamId));
+  }
+
+  if (startDate) {
+    conditions.push(gte(qualityEvaluations.evaluatedAt, new Date(startDate)));
+  }
+
+  if (endDate) {
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+    conditions.push(lte(qualityEvaluations.evaluatedAt, end));
+  }
+
+  const performers = await db
+    .select({
+      employeeId: entries.employeeId,
+      employeeName: users.fullName,
+      employeeEmail: users.email,
+      teamId: users.teamId,
+      averageScore: sql<number>`avg(${qualityEvaluations.totalScore})`,
+      totalEvaluations: sql<number>`count(${qualityEvaluations.id})`,
+      highestScore: sql<number>`max(${qualityEvaluations.totalScore})`,
+      lowestScore: sql<number>`min(${qualityEvaluations.totalScore})`,
+    })
+    .from(qualityEvaluations)
+    .innerJoin(entries, eq(qualityEvaluations.entryId, entries.id))
+    .innerJoin(users, eq(entries.employeeId, users.id))
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .groupBy(entries.employeeId, users.fullName, users.email, users.teamId)
+    .orderBy(desc(sql`avg(${qualityEvaluations.totalScore})`))
+    .limit(limit);
+
+  return performers.map((performer) => ({
+    employeeId: performer.employeeId,
+    employeeName: performer.employeeName,
+    employeeEmail: performer.employeeEmail,
+    teamId: performer.teamId,
+    averageScore: Number(performer.averageScore || 0),
+    totalEvaluations: Number(performer.totalEvaluations || 0),
+    highestScore: Number(performer.highestScore || 0),
+    lowestScore: Number(performer.lowestScore || 0),
+  }));
+}

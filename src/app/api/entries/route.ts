@@ -1,5 +1,5 @@
 /**
- * Entries API Routes
+ * Entries API Routes - WITH ENHANCED ERROR HANDLING (FIXED)
  * GET /api/entries - List entries
  * POST /api/entries - Create entry
  */
@@ -14,172 +14,265 @@ import {
   bulkCreateEntries,
   getEntryStats,
 } from "@/db/utils/entries";
+import {
+  ApiErrors,
+  withErrorHandling,
+  getRequestContext,
+} from "@/lib/api/errors";
 
 // GET /api/entries - List entries
-export async function GET(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+export const GET = withErrorHandling(async (request: NextRequest) => {
+  // 🔥 STEP 1: Get context FIRST!
+  const context = await getRequestContext(request);
 
-    // Check permission
-    const canRead = await checkPermission(session.user.id, "entries", "read");
-    if (!canRead) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    // Get user permissions to determine scope
-    const userPerms = await getUserPermissions(session.user.id);
-    if (!userPerms) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    // Get query parameters
-    const searchParams = request.nextUrl.searchParams;
-    const employeeId = searchParams.get("employeeId");
-    const teamId = searchParams.get("teamId");
-    const entryTypeId = searchParams.get("entryTypeId");
-    const startDate = searchParams.get("startDate") || undefined;
-    const endDate = searchParams.get("endDate") || undefined;
-    const date = searchParams.get("date") || undefined;
-    const page = parseInt(searchParams.get("page") || "1");
-    const pageSize = parseInt(searchParams.get("pageSize") || "20");
-    const includeStats = searchParams.get("stats") === "true";
-
-    // Build filters based on permission scope
-    const filters: any = {
-      page,
-      pageSize,
-      startDate,
-      endDate,
-      date,
-    };
-
-    if (entryTypeId) filters.entryTypeId = parseInt(entryTypeId);
-
-    // Apply scope-based filtering
-    const readPermission = userPerms.permissions.find(
-      (p) => p.resource === "entries" && p.action === "read"
-    );
-
-    if (readPermission?.scope === "own") {
-      // Employee: only their own entries
-      filters.employeeId = session.user.id;
-    } else if (readPermission?.scope === "team") {
-      // Team leader: their team's entries
-      if (userPerms.teamId) {
-        filters.teamId = userPerms.teamId;
-      }
-      // Allow filtering by specific employee if provided
-      if (employeeId) {
-        filters.employeeId = parseInt(employeeId);
-      }
-    } else if (readPermission?.scope === "all") {
-      // Admin: all entries, can filter by employee or team
-      if (employeeId) filters.employeeId = parseInt(employeeId);
-      if (teamId) filters.teamId = parseInt(teamId);
-    }
-
-    const result = await getEntries(filters);
-
-    // Get stats if requested
-    let stats;
-    if (includeStats) {
-      stats = await getEntryStats({
-        employeeId: filters.employeeId,
-        teamId: filters.teamId,
-        startDate,
-        endDate,
-      });
-    }
-
-    return NextResponse.json({
-      success: true,
-      ...result,
-      stats,
-    });
-  } catch (error) {
-    console.error("Error fetching entries:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch entries" },
-      { status: 500 }
-    );
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return ApiErrors.unauthorized(context); // ✅ Pass context
   }
-}
+
+  // Add user info to context
+  context.userId = session.user.id;
+  context.userEmail = session.user.email;
+
+  const canRead = await checkPermission(session.user.id, "entries", "read");
+  if (!canRead) {
+    return ApiErrors.insufficientPermissions(context, "entries:read"); // ✅ Context first, then permission
+  }
+
+  const userPerms = await getUserPermissions(session.user.id);
+  if (!userPerms) {
+    return ApiErrors.forbidden(context); // ✅ Pass context
+  }
+
+  // Get query parameters
+  const searchParams = request.nextUrl.searchParams;
+  const employeeId = searchParams.get("employeeId");
+  const teamId = searchParams.get("teamId");
+  const entryTypeId = searchParams.get("entryTypeId");
+  const startDate = searchParams.get("startDate") || undefined;
+  const endDate = searchParams.get("endDate") || undefined;
+  const date = searchParams.get("date") || undefined;
+  const page = parseInt(searchParams.get("page") || "1");
+  const pageSize = parseInt(searchParams.get("pageSize") || "20");
+  const includeStats = searchParams.get("stats") === "true";
+
+  // Validate pagination
+  if (page < 1) {
+    return ApiErrors.invalidInput(context, "Page must be >= 1", "page"); // ✅
+  }
+  if (pageSize < 1 || pageSize > 100) {
+    return ApiErrors.invalidInput(
+      context,
+      "Page size must be between 1 and 100",
+      "pageSize"
+    ); // ✅
+  }
+
+  // Validate date range if both provided
+  if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
+    return ApiErrors.invalidDateRange(context);
+  }
+
+  // Build filters based on permission scope
+  const filters: any = {
+    page,
+    pageSize,
+    startDate,
+    endDate,
+    date,
+  };
+
+  if (employeeId) {
+    const empId = parseInt(employeeId);
+    if (isNaN(empId)) {
+      return ApiErrors.invalidInput(
+        context,
+        "Invalid employee ID",
+        "employeeId"
+      ); // ✅
+    }
+    filters.employeeId = empId;
+  }
+
+  if (teamId) {
+    const tId = parseInt(teamId);
+    if (isNaN(tId)) {
+      return ApiErrors.invalidInput(context, "Invalid team ID", "teamId"); // ✅
+    }
+    filters.teamId = tId;
+  }
+
+  if (entryTypeId) {
+    const typeId = parseInt(entryTypeId);
+    if (isNaN(typeId)) {
+      return ApiErrors.invalidInput(
+        context,
+        "Invalid entry type ID",
+        "entryTypeId"
+      ); // ✅
+    }
+    filters.entryTypeId = typeId;
+  }
+
+  // Apply permission-based filtering
+  const readPermission = userPerms.permissions.find(
+    (p) => p.resource === "entries" && p.action === "read"
+  );
+
+  if (readPermission?.scope === "own") {
+    filters.employeeId = session.user.id;
+  } else if (readPermission?.scope === "team") {
+    if (userPerms.teamId) {
+      filters.teamId = userPerms.teamId;
+    }
+  }
+
+  const result = await getEntries(filters);
+
+  const response: any = {
+    success: true,
+    data: result.entries,
+    pagination: {
+      page: result.pagination.page,
+      pageSize: result.pagination.pageSize,
+      total: result.pagination.total,
+      totalPages: result.pagination.totalPages,
+    },
+  };
+
+  if (includeStats) {
+    const stats = await getEntryStats(filters);
+    response.stats = stats;
+  }
+
+  return NextResponse.json(response, {
+    headers: {
+      "X-Request-ID": context.requestId || "", // ✅ Add request ID
+    },
+  });
+});
 
 // POST /api/entries - Create entry
-export async function POST(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export const POST = withErrorHandling(async (request: NextRequest) => {
+  // 🔥 STEP 1: Get context FIRST!
+  const context = await getRequestContext(request);
+
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return ApiErrors.unauthorized(context); // ✅
+  }
+
+  context.userId = session.user.id;
+  context.userEmail = session.user.email;
+
+  const canCreate = await checkPermission(session.user.id, "entries", "create");
+  if (!canCreate) {
+    return ApiErrors.insufficientPermissions(context, "entries:create"); // ✅
+  }
+
+  const body = await request.json();
+
+  // Check if bulk creation
+  if (Array.isArray(body)) {
+    // Validate all entries
+    for (let i = 0; i < body.length; i++) {
+      const entry = body[i];
+      if (!entry.employeeId) {
+        return ApiErrors.missingField(context, `entries[${i}].employeeId`); // ✅
+      }
+      if (!entry.entryTypeId) {
+        return ApiErrors.missingField(context, `entries[${i}].entryTypeId`); // ✅
+      }
+      if (!entry.entryName) {
+        return ApiErrors.missingField(context, `entries[${i}].entryName`); // ✅
+      }
+      if (!entry.timestamp) {
+        return ApiErrors.missingField(context, `entries[${i}].timestamp`); // ✅
+      }
     }
 
-    // Check permission
-    const canCreate = await checkPermission(
-      session.user.id,
-      "entries",
-      "create"
-    );
-    if (!canCreate) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const entries = await bulkCreateEntries(body);
 
-    const body = await request.json();
-
-    // Check if bulk create
-    if (Array.isArray(body)) {
-      // Bulk create entries
-      const entries = await bulkCreateEntries(
-        body.map((item) => ({
-          employeeId: session.user.id,
-          entryTypeId: item.entryTypeId,
-          productName: item.productName,
-          productDescription: item.productDescription,
-          followsNamingConvention: item.followsNamingConvention,
-          followsSpecificationOrder: item.followsSpecificationOrder,
-          containsUnwantedKeywords: item.containsUnwantedKeywords,
-        }))
-      );
-
-      return NextResponse.json({
-        success: true,
-        data: entries,
-        message: `${entries.length} entries created`,
-      });
-    }
-
-    // Single entry create
-    if (!body.entryTypeId || !body.productName) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      );
-    }
-
-    const entry = await createEntry({
-      employeeId: session.user.id,
-      entryTypeId: body.entryTypeId,
-      productName: body.productName,
-      productDescription: body.productDescription,
-      followsNamingConvention: body.followsNamingConvention,
-      followsSpecificationOrder: body.followsSpecificationOrder,
-      containsUnwantedKeywords: body.containsUnwantedKeywords,
-    });
-
-    return NextResponse.json({
-      success: true,
-      data: entry,
-    });
-  } catch (error) {
-    console.error("Error creating entry:", error);
     return NextResponse.json(
       {
-        error:
-          error instanceof Error ? error.message : "Failed to create entry",
+        success: true,
+        data: entries,
+        message: `${entries.length} entries created successfully`,
       },
-      { status: 500 }
+      {
+        status: 201,
+        headers: {
+          "X-Request-ID": context.requestId || "", // ✅
+        },
+      }
     );
   }
-}
+
+  // Single entry creation - validate required fields
+  if (!body.employeeId) {
+    return ApiErrors.missingField(context, "employeeId");
+  }
+  if (!body.entryTypeId) {
+    return ApiErrors.missingField(context, "entryTypeId");
+  }
+  if (!body.productName) {
+    return ApiErrors.missingField(context, "productName");
+  }
+
+  // Validate IDs
+  const employeeId = parseInt(body.employeeId);
+  if (isNaN(employeeId)) {
+    return ApiErrors.invalidInput(
+      context,
+      "Employee ID must be a number",
+      "employeeId"
+    );
+  }
+
+  const entryTypeId = parseInt(body.entryTypeId);
+  if (isNaN(entryTypeId)) {
+    return ApiErrors.invalidInput(
+      context,
+      "Entry type ID must be a number",
+      "entryTypeId"
+    );
+  }
+
+  // Check permission scope
+  const userPerms = await getUserPermissions(session.user.id);
+  const createPermission = userPerms?.permissions.find(
+    (p) => p.resource === "entries" && p.action === "create"
+  );
+
+  if (createPermission?.scope === "own" && employeeId !== session.user.id) {
+    return ApiErrors.businessRuleViolation(
+      context,
+      "You can only create entries for yourself"
+    );
+  }
+
+  const entry = await createEntry({
+    employeeId,
+    entryTypeId,
+    productName: body.productName,
+    productDescription: body.productDescription,
+    followsNamingConvention: body.followsNamingConvention,
+    followsSpecificationOrder: body.followsSpecificationOrder,
+    containsUnwantedKeywords: body.containsUnwantedKeywords,
+    entryTime: body.entryTime ? new Date(body.entryTime) : undefined,
+  });
+
+  return NextResponse.json(
+    {
+      success: true,
+      data: entry,
+      message: "Entry created successfully",
+    },
+    {
+      status: 201,
+      headers: {
+        "X-Request-ID": context.requestId || "", // ✅
+      },
+    }
+  );
+});

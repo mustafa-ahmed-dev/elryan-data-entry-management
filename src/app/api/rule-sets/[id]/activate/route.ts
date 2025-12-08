@@ -1,5 +1,5 @@
 /**
- * Activate Rule Set API
+ * Activate Rule Set API - WITH ENHANCED ERROR HANDLING
  * POST /api/rule-sets/[id]/activate - Activate rule set (deactivate others)
  */
 
@@ -10,18 +10,30 @@ import { checkPermission } from "@/db/utils/permissions";
 import { db } from "@/db";
 import { evaluationRuleSets } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import {
+  ApiErrors,
+  withErrorHandling,
+  getRequestContext,
+} from "@/lib/api/errors";
 
 interface RouteParams {
   params: { id: string };
 }
 
 // POST /api/rule-sets/[id]/activate
-export async function POST(request: NextRequest, { params }: RouteParams) {
-  try {
+export const POST = withErrorHandling(
+  async (request: NextRequest, { params }: RouteParams) => {
+    // Get context FIRST
+    const context = await getRequestContext(request);
+
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return ApiErrors.unauthorized(context);
     }
+
+    // Add user info to context
+    context.userId = session.user.id;
+    context.userEmail = session.user.email;
 
     const canUpdate = await checkPermission(
       session.user.id,
@@ -30,15 +42,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       "all"
     );
     if (!canUpdate) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return ApiErrors.insufficientPermissions(
+        context,
+        "evaluations:update:all"
+      );
     }
 
     const ruleSetId = parseInt(params.id);
     if (isNaN(ruleSetId)) {
-      return NextResponse.json(
-        { error: "Invalid rule set ID" },
-        { status: 400 }
-      );
+      return ApiErrors.invalidId(context, "Rule set");
     }
 
     // Check if rule set exists
@@ -49,9 +61,22 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .limit(1);
 
     if (!ruleSet) {
+      return ApiErrors.notFound(context, "Rule set");
+    }
+
+    // Check if already active
+    if (ruleSet.isActive) {
       return NextResponse.json(
-        { error: "Rule set not found" },
-        { status: 404 }
+        {
+          success: true,
+          data: ruleSet,
+          message: `${ruleSet.name} is already the active rule set`,
+        },
+        {
+          headers: {
+            "X-Request-ID": context.requestId || "",
+          },
+        }
       );
     }
 
@@ -65,21 +90,17 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       .where(eq(evaluationRuleSets.id, ruleSetId))
       .returning();
 
-    return NextResponse.json({
-      success: true,
-      data: activated,
-      message: `${activated.name} is now the active rule set`,
-    });
-  } catch (error) {
-    console.error("Error activating rule set:", error);
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to activate rule set",
+        success: true,
+        data: activated,
+        message: `${activated.name} is now the active rule set`,
       },
-      { status: 500 }
+      {
+        headers: {
+          "X-Request-ID": context.requestId || "",
+        },
+      }
     );
   }
-}
+);

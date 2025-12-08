@@ -1,5 +1,5 @@
 /**
- * Team Detail API Routes - Fixed for Next.js 15+
+ * Team Detail API Routes - WITH ENHANCED ERROR HANDLING
  * GET /api/teams/[id] - Get team details
  * PATCH /api/teams/[id] - Update team
  * DELETE /api/teams/[id] - Delete team
@@ -10,59 +10,79 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { checkPermission } from "@/db/utils/permissions";
 import { getTeamById, updateTeam, deleteTeam } from "@/db/utils/teams";
+import {
+  ApiErrors,
+  withErrorHandling,
+  getRequestContext,
+} from "@/lib/api/errors";
 
 interface RouteParams {
-  params: Promise<{ id: string }>; // ✅ Now a Promise
+  params: Promise<{ id: string }>; // Next.js 15+ - params is a Promise
 }
 
 // GET /api/teams/[id] - Get team details
-export async function GET(request: NextRequest, props: RouteParams) {
-  try {
-    const params = await props.params; // ✅ Await params
+export const GET = withErrorHandling(
+  async (request: NextRequest, props: RouteParams) => {
+    // Get context FIRST
+    const context = await getRequestContext(request);
+
+    const params = await props.params; // Await params
 
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return ApiErrors.unauthorized(context);
     }
+
+    // Add user info to context
+    context.userId = session.user.id;
+    context.userEmail = session.user.email;
 
     const canRead = await checkPermission(session.user.id, "teams", "read");
     if (!canRead) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return ApiErrors.insufficientPermissions(context, "teams:read");
     }
 
     const teamId = parseInt(params.id);
     if (isNaN(teamId)) {
-      return NextResponse.json({ error: "Invalid team ID" }, { status: 400 });
+      return ApiErrors.invalidId(context, "Team");
     }
 
     const team = await getTeamById(teamId);
 
     if (!team) {
-      return NextResponse.json({ error: "Team not found" }, { status: 404 });
+      return ApiErrors.notFound(context, "Team");
     }
 
-    return NextResponse.json({
-      success: true,
-      data: team,
-    });
-  } catch (error) {
-    console.error("Error fetching team:", error);
     return NextResponse.json(
-      { error: "Failed to fetch team" },
-      { status: 500 }
+      {
+        success: true,
+        data: team,
+      },
+      {
+        headers: {
+          "X-Request-ID": context.requestId || "",
+        },
+      }
     );
   }
-}
+);
 
 // PATCH /api/teams/[id] - Update team
-export async function PATCH(request: NextRequest, props: RouteParams) {
-  try {
-    const params = await props.params; // ✅ Await params
+export const PATCH = withErrorHandling(
+  async (request: NextRequest, props: RouteParams) => {
+    // Get context FIRST
+    const context = await getRequestContext(request);
+
+    const params = await props.params; // Await params
 
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return ApiErrors.unauthorized(context);
     }
+
+    // Add user info to context
+    context.userId = session.user.id;
+    context.userEmail = session.user.email;
 
     const canUpdate = await checkPermission(
       session.user.id,
@@ -71,12 +91,12 @@ export async function PATCH(request: NextRequest, props: RouteParams) {
       "all"
     );
     if (!canUpdate) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return ApiErrors.insufficientPermissions(context, "teams:update:all");
     }
 
     const teamId = parseInt(params.id);
     if (isNaN(teamId)) {
-      return NextResponse.json({ error: "Invalid team ID" }, { status: 400 });
+      return ApiErrors.invalidId(context, "Team");
     }
 
     const body = await request.json();
@@ -88,38 +108,76 @@ export async function PATCH(request: NextRequest, props: RouteParams) {
       body.leaderId === undefined &&
       body.isActive === undefined
     ) {
-      return NextResponse.json(
-        { error: "No fields to update" },
-        { status: 400 }
+      return ApiErrors.invalidInput(
+        context,
+        "At least one field must be provided for update"
       );
+    }
+
+    // Validate name if provided
+    if (body.name !== undefined) {
+      if (typeof body.name !== "string" || body.name.trim().length === 0) {
+        return ApiErrors.invalidInput(
+          context,
+          "Team name cannot be empty",
+          "name"
+        );
+      }
+
+      if (body.name.length > 100) {
+        return ApiErrors.invalidInput(
+          context,
+          "Team name must be 100 characters or less",
+          "name"
+        );
+      }
+    }
+
+    // Validate leaderId if provided
+    if (body.leaderId !== undefined && body.leaderId !== null) {
+      const leaderId = parseInt(body.leaderId);
+      if (isNaN(leaderId)) {
+        return ApiErrors.invalidInput(
+          context,
+          "Leader ID must be a number",
+          "leaderId"
+        );
+      }
     }
 
     const team = await updateTeam(teamId, body);
 
-    return NextResponse.json({
-      success: true,
-      data: team,
-    });
-  } catch (error) {
-    console.error("Error updating team:", error);
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Failed to update team",
+        success: true,
+        data: team,
+        message: "Team updated successfully",
       },
-      { status: 500 }
+      {
+        headers: {
+          "X-Request-ID": context.requestId || "",
+        },
+      }
     );
   }
-}
+);
 
 // DELETE /api/teams/[id] - Delete team
-export async function DELETE(request: NextRequest, props: RouteParams) {
-  try {
-    const params = await props.params; // ✅ Await params
+export const DELETE = withErrorHandling(
+  async (request: NextRequest, props: RouteParams) => {
+    // Get context FIRST
+    const context = await getRequestContext(request);
+
+    const params = await props.params; // Await params
 
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return ApiErrors.unauthorized(context);
     }
+
+    // Add user info to context
+    context.userId = session.user.id;
+    context.userEmail = session.user.email;
 
     const canDelete = await checkPermission(
       session.user.id,
@@ -128,27 +186,26 @@ export async function DELETE(request: NextRequest, props: RouteParams) {
       "all"
     );
     if (!canDelete) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return ApiErrors.insufficientPermissions(context, "teams:delete:all");
     }
 
     const teamId = parseInt(params.id);
     if (isNaN(teamId)) {
-      return NextResponse.json({ error: "Invalid team ID" }, { status: 400 });
+      return ApiErrors.invalidId(context, "Team");
     }
 
     await deleteTeam(teamId);
 
-    return NextResponse.json({
-      success: true,
-      message: "Team deleted successfully",
-    });
-  } catch (error) {
-    console.error("Error deleting team:", error);
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Failed to delete team",
+        success: true,
+        message: "Team deleted successfully",
       },
-      { status: 500 }
+      {
+        headers: {
+          "X-Request-ID": context.requestId || "",
+        },
+      }
     );
   }
-}
+);
