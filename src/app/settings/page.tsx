@@ -68,8 +68,7 @@ function SettingsContent() {
       description: "Configure security settings and access control",
       icon: <SafetyOutlined style={{ fontSize: "48px", color: "#eb2f96" }} />,
       path: "/settings/security",
-      available: false,
-      comingSoon: true,
+      available: true,
     },
     {
       title: "Notifications",

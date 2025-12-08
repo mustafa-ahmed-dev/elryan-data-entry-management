@@ -19,30 +19,31 @@ import {
 } from "@/lib/api/errors";
 
 interface RouteParams {
-  params: { id: string };
+  params: Promise<{ id: string }>; // FIXED: Changed to Promise
 }
 
 // GET /api/entry-types/[id]
 export const GET = withErrorHandling(
-  async (request: NextRequest, { params }: RouteParams) => {
-    const context = await getRequestContext(request);
+  async (request: NextRequest, context: RouteParams) => {
+    const reqContext = await getRequestContext(request);
+    const params = await context.params; // FIXED: Await params
 
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return ApiErrors.unauthorized(context);
+      return ApiErrors.unauthorized(reqContext);
     }
 
-    context.userId = session.user.id;
-    context.userEmail = session.user.email;
+    reqContext.userId = session.user.id;
+    reqContext.userEmail = session.user.email;
 
     const canRead = await checkPermission(session.user.id, "entries", "read");
     if (!canRead) {
-      return ApiErrors.insufficientPermissions(context, "entries:read");
+      return ApiErrors.insufficientPermissions(reqContext, "entries:read");
     }
 
     const entryTypeId = parseInt(params.id);
     if (isNaN(entryTypeId)) {
-      return ApiErrors.invalidId(context, "Entry type");
+      return ApiErrors.invalidId(reqContext, "Entry type");
     }
 
     const [entryType] = await db
@@ -52,7 +53,7 @@ export const GET = withErrorHandling(
       .limit(1);
 
     if (!entryType) {
-      return ApiErrors.notFound(context, "Entry type");
+      return ApiErrors.notFound(reqContext, "Entry type");
     }
 
     return NextResponse.json(
@@ -62,7 +63,7 @@ export const GET = withErrorHandling(
       },
       {
         headers: {
-          "X-Request-ID": context.requestId || "",
+          "X-Request-ID": reqContext.requestId || "",
         },
       }
     );
@@ -71,16 +72,17 @@ export const GET = withErrorHandling(
 
 // PATCH /api/entry-types/[id]
 export const PATCH = withErrorHandling(
-  async (request: NextRequest, { params }: RouteParams) => {
-    const context = await getRequestContext(request);
+  async (request: NextRequest, context: RouteParams) => {
+    const reqContext = await getRequestContext(request);
+    const params = await context.params; // FIXED: Await params
 
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return ApiErrors.unauthorized(context);
+      return ApiErrors.unauthorized(reqContext);
     }
 
-    context.userId = session.user.id;
-    context.userEmail = session.user.email;
+    reqContext.userId = session.user.id;
+    reqContext.userEmail = session.user.email;
 
     const canUpdate = await checkPermission(
       session.user.id,
@@ -89,12 +91,15 @@ export const PATCH = withErrorHandling(
       "all"
     );
     if (!canUpdate) {
-      return ApiErrors.insufficientPermissions(context, "entries:update:all");
+      return ApiErrors.insufficientPermissions(
+        reqContext,
+        "entries:update:all"
+      );
     }
 
     const entryTypeId = parseInt(params.id);
     if (isNaN(entryTypeId)) {
-      return ApiErrors.invalidId(context, "Entry type");
+      return ApiErrors.invalidId(reqContext, "Entry type");
     }
 
     const body = await request.json();
@@ -105,7 +110,7 @@ export const PATCH = withErrorHandling(
     if (body.name !== undefined) {
       if (typeof body.name !== "string" || body.name.trim().length === 0) {
         return ApiErrors.invalidInput(
-          context,
+          reqContext,
           "Name must be a non-empty string",
           "name"
         );
@@ -118,7 +123,7 @@ export const PATCH = withErrorHandling(
     }
 
     if (Object.keys(updateData).length === 0) {
-      return ApiErrors.invalidInput(context, "No valid fields to update");
+      return ApiErrors.invalidInput(reqContext, "No valid fields to update");
     }
 
     try {
@@ -129,7 +134,7 @@ export const PATCH = withErrorHandling(
         .returning();
 
       if (!updated) {
-        return ApiErrors.notFound(context, "Entry type");
+        return ApiErrors.notFound(reqContext, "Entry type");
       }
 
       return NextResponse.json(
@@ -140,13 +145,13 @@ export const PATCH = withErrorHandling(
         },
         {
           headers: {
-            "X-Request-ID": context.requestId || "",
+            "X-Request-ID": reqContext.requestId || "",
           },
         }
       );
     } catch (error) {
       if (error instanceof Error && error.message.includes("duplicate")) {
-        return ApiErrors.duplicateEntry(context, "name");
+        return ApiErrors.duplicateEntry(reqContext, "name");
       }
       throw error;
     }
@@ -155,16 +160,17 @@ export const PATCH = withErrorHandling(
 
 // DELETE /api/entry-types/[id]
 export const DELETE = withErrorHandling(
-  async (request: NextRequest, { params }: RouteParams) => {
-    const context = await getRequestContext(request);
+  async (request: NextRequest, context: RouteParams) => {
+    const reqContext = await getRequestContext(request);
+    const params = await context.params; // FIXED: Await params
 
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return ApiErrors.unauthorized(context);
+      return ApiErrors.unauthorized(reqContext);
     }
 
-    context.userId = session.user.id;
-    context.userEmail = session.user.email;
+    reqContext.userId = session.user.id;
+    reqContext.userEmail = session.user.email;
 
     const canDelete = await checkPermission(
       session.user.id,
@@ -173,12 +179,15 @@ export const DELETE = withErrorHandling(
       "all"
     );
     if (!canDelete) {
-      return ApiErrors.insufficientPermissions(context, "entries:delete:all");
+      return ApiErrors.insufficientPermissions(
+        reqContext,
+        "entries:delete:all"
+      );
     }
 
     const entryTypeId = parseInt(params.id);
     if (isNaN(entryTypeId)) {
-      return ApiErrors.invalidId(context, "Entry type");
+      return ApiErrors.invalidId(reqContext, "Entry type");
     }
 
     // Check if entry type has been used in entries
@@ -189,7 +198,7 @@ export const DELETE = withErrorHandling(
 
     const count = Number(entryCount.count);
     if (count > 0) {
-      return ApiErrors.cannotDeleteInUse(context, "Entry type", count);
+      return ApiErrors.cannotDeleteInUse(reqContext, "Entry type", count);
     }
 
     const [deleted] = await db
@@ -198,7 +207,7 @@ export const DELETE = withErrorHandling(
       .returning();
 
     if (!deleted) {
-      return ApiErrors.notFound(context, "Entry type");
+      return ApiErrors.notFound(reqContext, "Entry type");
     }
 
     return NextResponse.json(
@@ -209,7 +218,7 @@ export const DELETE = withErrorHandling(
       },
       {
         headers: {
-          "X-Request-ID": context.requestId || "",
+          "X-Request-ID": reqContext.requestId || "",
         },
       }
     );

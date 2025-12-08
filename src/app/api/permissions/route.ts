@@ -9,31 +9,25 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { getUserPermissions } from "@/db/utils/permissions";
-import {
-  ApiErrors,
-  withErrorHandling,
-  getRequestContext,
-} from "@/lib/api/errors";
 
-export const GET = withErrorHandling(async (request: NextRequest) => {
-  const context = await getRequestContext(request);
+export async function GET(request: NextRequest) {
+  try {
+    // Get current session
+    const session = await getServerSession(authOptions);
 
-  const session = await getServerSession(authOptions);
-  if (!session?.user) {
-    return ApiErrors.unauthorized(context);
-  }
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  context.userId = session.user.id;
-  context.userEmail = session.user.email;
+    // Fetch user permissions from database
+    const userPermissions = await getUserPermissions(session.user.id);
 
-  // Fetch user permissions from database
-  const userPermissions = await getUserPermissions(session.user.id);
-  if (!userPermissions) {
-    return ApiErrors.userNotFound(context);
-  }
+    if (!userPermissions) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
 
-  return NextResponse.json(
-    {
+    // Return permissions
+    return NextResponse.json({
       success: true,
       permissions: userPermissions.permissions,
       role: {
@@ -42,11 +36,13 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
         hierarchy: userPermissions.roleHierarchy,
       },
       teamId: userPermissions.teamId,
-    },
-    {
-      headers: {
-        "X-Request-ID": context.requestId || "",
-      },
-    }
-  );
-});
+    });
+  } catch (error) {
+    console.error("Error fetching permissions:", error);
+
+    return NextResponse.json(
+      { error: "Failed to fetch permissions" },
+      { status: 500 }
+    );
+  }
+}

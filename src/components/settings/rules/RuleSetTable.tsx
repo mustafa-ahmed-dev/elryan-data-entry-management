@@ -11,9 +11,9 @@ import {
   EditOutlined,
   DeleteOutlined,
   EyeOutlined,
-  CheckCircleOutlined,
   StarOutlined,
   StarFilled,
+  StopOutlined,
 } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
@@ -34,6 +34,7 @@ interface RuleSetTableProps {
   onEdit: (ruleSet: RuleSet) => void;
   onDelete: (ruleSetId: number) => void;
   onActivate: (ruleSetId: number) => void;
+  onDeactivate?: (ruleSetId: number) => void; // NEW: Added deactivation handler
 }
 
 export function RuleSetTable({
@@ -43,6 +44,7 @@ export function RuleSetTable({
   onEdit,
   onDelete,
   onActivate,
+  onDeactivate,
 }: RuleSetTableProps) {
   const columns: ColumnsType<RuleSet> = [
     {
@@ -116,7 +118,36 @@ export function RuleSetTable({
               onClick={() => onEdit(record)}
             />
           </Tooltip>
-          {!record.isActive ? (
+
+          {/* FIXED: Show deactivate button for active rule sets */}
+          {record.isActive ? (
+            onDeactivate ? (
+              <Popconfirm
+                title="Deactivate Rule Set"
+                description="Are you sure you want to deactivate this rule set? No active rule set means evaluations cannot be created."
+                onConfirm={() => onDeactivate(record.id)}
+                okText="Deactivate"
+                okType="danger"
+              >
+                <Tooltip title="Deactivate this rule set">
+                  <Button
+                    type="text"
+                    icon={<StopOutlined />}
+                    style={{ color: "#ff4d4f" }}
+                  />
+                </Tooltip>
+              </Popconfirm>
+            ) : (
+              <Tooltip title="This rule set is currently active">
+                <Button
+                  type="text"
+                  icon={<StarFilled />}
+                  disabled
+                  style={{ color: "#52c41a" }}
+                />
+              </Tooltip>
+            )
+          ) : (
             <Tooltip title="Activate this rule set">
               <Button
                 type="text"
@@ -125,16 +156,8 @@ export function RuleSetTable({
                 style={{ color: "#faad14" }}
               />
             </Tooltip>
-          ) : (
-            <Tooltip title="This rule set is already active">
-              <Button
-                type="text"
-                icon={<CheckCircleOutlined />}
-                disabled
-                style={{ color: "#52c41a" }}
-              />
-            </Tooltip>
           )}
+
           <Popconfirm
             title="Delete rule set"
             description={

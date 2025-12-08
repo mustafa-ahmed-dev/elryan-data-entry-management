@@ -88,10 +88,6 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     return ApiErrors.missingField(context, "name");
   }
 
-  if (!body.version) {
-    return ApiErrors.missingField(context, "version");
-  }
-
   // Validate name length
   if (body.name.trim().length === 0) {
     return ApiErrors.invalidInput(context, "Name cannot be empty", "name");
@@ -105,15 +101,6 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     );
   }
 
-  // Validate version format
-  if (typeof body.version !== "string" || body.version.trim().length === 0) {
-    return ApiErrors.invalidInput(
-      context,
-      "Version must be a non-empty string",
-      "version"
-    );
-  }
-
   // Create rule set (default to inactive)
   const [ruleSet] = await db
     .insert(evaluationRuleSets)
@@ -121,7 +108,6 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
       name: body.name,
       description: body.description || null,
       isActive: false, // New rule sets start as inactive
-      version: body.version,
     })
     .returning();
 

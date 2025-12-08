@@ -7,7 +7,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { Modal, Form, Input, InputNumber, Alert } from "antd";
+import { Modal, Form, Input, Alert } from "antd";
 
 interface RuleSetFormProps {
   open: boolean;
@@ -34,7 +34,6 @@ export function RuleSetForm({
         form.setFieldsValue({
           name: ruleSet.name,
           description: ruleSet.description,
-          version: ruleSet.version,
         });
       } else {
         form.resetFields();
@@ -72,7 +71,7 @@ export function RuleSetForm({
           ]}
         >
           <Input
-            placeholder="e.g., Standard Quality V1, Enhanced Quality V2"
+            placeholder="e.g., Standard Quality Rules, Enhanced Quality Rules"
             maxLength={200}
           />
         </Form.Item>
@@ -95,26 +94,10 @@ export function RuleSetForm({
           />
         </Form.Item>
 
-        <Form.Item
-          name="version"
-          label="Version"
-          rules={[
-            { required: true, message: "Please enter version number" },
-            { type: "number", min: 1, message: "Version must be at least 1" },
-          ]}
-          extra="Use incremental version numbers (1, 2, 3, etc.) to track improvements"
-        >
-          <InputNumber
-            style={{ width: "100%" }}
-            min={1}
-            placeholder="e.g., 1 for first version"
-          />
-        </Form.Item>
-
         {!isEditing && (
           <Alert
-            message="New Rule Set"
-            description="The new rule set will be created as inactive. After adding rules to it, you can activate it from the rule sets list."
+            title="New Rule Set"
+            description="The new rule set will be created as inactive with an auto-generated version number. After adding rules to it, you can activate it from the rule sets list."
             type="info"
             showIcon
             style={{ marginTop: "16px" }}
@@ -123,7 +106,7 @@ export function RuleSetForm({
 
         {isEditing && ruleSet?.isActive && (
           <Alert
-            message="Active Rule Set"
+            title="Active Rule Set"
             description="This is the currently active rule set used for new evaluations. Changes will apply to future evaluations."
             type="warning"
             showIcon

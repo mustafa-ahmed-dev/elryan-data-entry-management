@@ -65,11 +65,13 @@ function QualityRulesContent() {
     updateRuleSet,
     deleteRuleSet,
     activateRuleSet,
+    deactivateRuleSet,
     isCreating: isCreatingRuleSet,
     isUpdating: isUpdatingRuleSet,
     isDeleting: isDeletingRuleSet,
     isActivating,
     refresh: refreshRuleSets,
+    isDeactivating,
   } = useRuleSets();
 
   // Rules hook (for viewing rule set details)
@@ -116,6 +118,15 @@ function QualityRulesContent() {
       message.success("Rule set deleted successfully");
     } else {
       message.error(result.error || "Failed to delete rule set");
+    }
+  };
+
+  const handleDeactivateRuleSet = async (ruleSetId: number) => {
+    const result = await deactivateRuleSet(ruleSetId);
+    if (result.success) {
+      message.success(result.message || "Rule set deactivated successfully");
+    } else {
+      message.error(result.error || "Failed to deactivate rule set");
     }
   };
 
@@ -305,6 +316,7 @@ function QualityRulesContent() {
                   onEdit={handleEditRuleSet}
                   onDelete={handleDeleteRuleSet}
                   onActivate={handleActivateRuleSet}
+                  onDeactivate={handleDeactivateRuleSet}
                 />
               </Card>
             ),

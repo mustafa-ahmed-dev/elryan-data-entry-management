@@ -34,6 +34,7 @@ export interface UserFilters {
   roleId?: number;
   teamId?: number;
   isActive?: boolean;
+  userId?: number;
   page?: number;
   pageSize?: number;
 }
@@ -89,9 +90,18 @@ export async function getUserByEmail(email: string) {
 
 /**
  * Get users with filters and pagination
+ * FIXED: Now includes roleName and teamName in the results
  */
 export async function getUsers(filters: UserFilters = {}) {
-  const { search, roleId, teamId, isActive, page = 1, pageSize = 20 } = filters;
+  const {
+    search,
+    roleId,
+    teamId,
+    isActive,
+    userId,
+    page = 1,
+    pageSize = 20,
+  } = filters;
 
   // Build where conditions
   const conditions = [];
@@ -114,14 +124,20 @@ export async function getUsers(filters: UserFilters = {}) {
     conditions.push(eq(users.isActive, isActive));
   }
 
+  if (userId !== undefined) {
+    conditions.push(eq(users.id, userId));
+  }
+
   // Get total count
   const [{ count }] = await db
     .select({ count: sql<number>`count(*)` })
     .from(users)
     .where(conditions.length > 0 ? and(...conditions) : undefined);
 
-  // Get paginated users with role and team info
-  const usersList = await db
+  const total = Number(count);
+
+  // Get users with role and team names using LEFT JOIN
+  const usersData = await db
     .select({
       id: users.id,
       fullName: users.fullName,
@@ -136,7 +152,7 @@ export async function getUsers(filters: UserFilters = {}) {
       updatedAt: users.updatedAt,
     })
     .from(users)
-    .innerJoin(roles, eq(users.roleId, roles.id))
+    .leftJoin(roles, eq(users.roleId, roles.id))
     .leftJoin(teams, eq(users.teamId, teams.id))
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(users.createdAt))
@@ -144,13 +160,11 @@ export async function getUsers(filters: UserFilters = {}) {
     .offset((page - 1) * pageSize);
 
   return {
-    data: usersList,
-    pagination: {
-      page,
-      pageSize,
-      total: Number(count),
-      totalPages: Math.ceil(Number(count) / pageSize),
-    },
+    users: usersData,
+    total,
+    page,
+    pageSize,
+    totalPages: Math.ceil(total / pageSize),
   };
 }
 
@@ -159,19 +173,18 @@ export async function getUsers(filters: UserFilters = {}) {
 // ============================================================================
 
 /**
- * Update user by ID
+ * Update user
  */
 export async function updateUser(id: number, input: UpdateUserInput) {
-  const updateData: any = {};
+  const updateData: any = { updatedAt: new Date() };
 
-  if (input.fullName) updateData.fullName = input.fullName;
-  if (input.email) updateData.email = input.email;
-  if (input.passwordHash) updateData.passwordHash = input.passwordHash;
+  if (input.fullName !== undefined) updateData.fullName = input.fullName;
+  if (input.email !== undefined) updateData.email = input.email;
+  if (input.passwordHash !== undefined)
+    updateData.passwordHash = input.passwordHash;
   if (input.roleId !== undefined) updateData.roleId = input.roleId;
   if (input.teamId !== undefined) updateData.teamId = input.teamId;
   if (input.isActive !== undefined) updateData.isActive = input.isActive;
-
-  updateData.updatedAt = new Date();
 
   const [updated] = await db
     .update(users)
@@ -179,43 +192,41 @@ export async function updateUser(id: number, input: UpdateUserInput) {
     .where(eq(users.id, id))
     .returning();
 
-  if (!updated) {
-    throw new Error("User not found");
-  }
-
-  return updated;
+  return updated || null;
 }
 
 // ============================================================================
-// DELETE
+// DELETE (Soft delete - set isActive to false)
 // ============================================================================
 
 /**
- * Delete user by ID (soft delete - set isActive to false)
+ * Deactivate user (soft delete)
  */
-export async function deleteUser(id: number) {
-  const [deleted] = await db
+export async function deactivateUser(id: number) {
+  const [updated] = await db
     .update(users)
-    .set({ isActive: false, updatedAt: new Date() })
+    .set({
+      isActive: false,
+      updatedAt: new Date(),
+    })
     .where(eq(users.id, id))
     .returning();
 
-  if (!deleted) {
-    throw new Error("User not found");
-  }
-
-  return deleted;
+  return updated || null;
 }
 
 /**
- * Permanently delete user (use with caution)
+ * Activate user
  */
-export async function permanentlyDeleteUser(id: number) {
-  const [deleted] = await db.delete(users).where(eq(users.id, id)).returning();
+export async function activateUser(id: number) {
+  const [updated] = await db
+    .update(users)
+    .set({
+      isActive: true,
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, id))
+    .returning();
 
-  if (!deleted) {
-    throw new Error("User not found");
-  }
-
-  return deleted;
+  return updated || null;
 }

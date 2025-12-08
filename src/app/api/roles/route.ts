@@ -9,40 +9,31 @@ import { authOptions } from "@/lib/auth/config";
 import { db } from "@/db";
 import { roles } from "@/db/schema";
 import { eq, asc } from "drizzle-orm";
-import {
-  ApiErrors,
-  withErrorHandling,
-  getRequestContext,
-} from "@/lib/api/errors";
 
 // GET /api/roles
-export const GET = withErrorHandling(async (request: NextRequest) => {
-  const context = await getRequestContext(request);
+export async function GET(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const session = await getServerSession(authOptions);
-  if (!session?.user) {
-    return ApiErrors.unauthorized(context);
-  }
+    // Get all active roles
+    const rolesList = await db
+      .select()
+      .from(roles)
+      .where(eq(roles.isActive, true))
+      .orderBy(asc(roles.hierarchy));
 
-  context.userId = session.user.id;
-  context.userEmail = session.user.email;
-
-  // Get all active roles
-  const rolesList = await db
-    .select()
-    .from(roles)
-    .where(eq(roles.isActive, true))
-    .orderBy(asc(roles.hierarchy));
-
-  return NextResponse.json(
-    {
+    return NextResponse.json({
       success: true,
       data: rolesList,
-    },
-    {
-      headers: {
-        "X-Request-ID": context.requestId || "",
-      },
-    }
-  );
-});
+    });
+  } catch (error) {
+    console.error("Error fetching roles:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch roles" },
+      { status: 500 }
+    );
+  }
+}

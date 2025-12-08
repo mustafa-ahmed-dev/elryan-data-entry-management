@@ -1,4 +1,3 @@
-// src/app/api/users/route.ts
 /**
  * Users API Routes
  * GET /api/users - List users with pagination
@@ -108,10 +107,10 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
       success: true,
       data: result.users,
       pagination: {
-        page: result.pagination.page,
-        pageSize: result.pagination.pageSize,
-        total: result.pagination.total,
-        totalPages: result.pagination.totalPages,
+        page: result.page,
+        pageSize: result.pageSize,
+        totalPages: result.totalPages,
+        totalItems: result.total,
       },
     },
     {
@@ -122,7 +121,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
   );
 });
 
-// POST /api/users - Create user
+// POST /api/users - Create new user
 export const POST = withErrorHandling(async (request: NextRequest) => {
   const context = await getRequestContext(request);
 
@@ -134,14 +133,9 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   context.userId = session.user.id;
   context.userEmail = session.user.email;
 
-  const canCreate = await checkPermission(
-    session.user.id,
-    "users",
-    "create",
-    "all"
-  );
+  const canCreate = await checkPermission(session.user.id, "users", "create");
   if (!canCreate) {
-    return ApiErrors.insufficientPermissions(context, "users:create:all");
+    return ApiErrors.insufficientPermissions(context, "users:create");
   }
 
   const body = await request.json();
@@ -160,63 +154,26 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     return ApiErrors.missingField(context, "roleId");
   }
 
-  // Validate field types and formats
-  if (typeof body.fullName !== "string" || body.fullName.trim().length === 0) {
-    return ApiErrors.invalidInput(
-      context,
-      "Full name must be a non-empty string",
-      "fullName"
-    );
-  }
-
+  // Validate email format
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(body.email)) {
     return ApiErrors.invalidInput(context, "Invalid email format", "email");
   }
 
-  if (typeof body.password !== "string" || body.password.length < 8) {
-    return ApiErrors.invalidInput(
-      context,
-      "Password must be at least 8 characters",
-      "password"
-    );
-  }
-
-  const roleId = parseInt(body.roleId);
-  if (isNaN(roleId)) {
-    return ApiErrors.invalidInput(
-      context,
-      "Role ID must be a number",
-      "roleId"
-    );
-  }
-
-  let teamId = null;
-  if (body.teamId !== undefined && body.teamId !== null) {
-    teamId = parseInt(body.teamId);
-    if (isNaN(teamId)) {
-      return ApiErrors.invalidInput(
-        context,
-        "Team ID must be a number",
-        "teamId"
-      );
-    }
-  }
+  // Hash password
+  const passwordHash = await hash(body.password);
 
   try {
-    // Hash password
-    const passwordHash = await hash(body.password);
-
     const user = await createUser({
-      fullName: body.fullName.trim(),
-      email: body.email.toLowerCase(),
+      fullName: body.fullName,
+      email: body.email,
       passwordHash,
-      roleId,
-      teamId,
-      createdBy: session.user.id,
+      roleId: body.roleId,
+      teamId: body.teamId || null,
+      isActive: body.isActive !== undefined ? body.isActive : true,
     });
 
-    // Remove password hash from response
+    // Don't return password hash
     const { passwordHash: _, ...userWithoutPassword } = user;
 
     return NextResponse.json(
@@ -233,9 +190,14 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
       }
     );
   } catch (error) {
-    if (error instanceof Error && error.message.includes("duplicate")) {
-      return ApiErrors.duplicateEntry(context, "email");
+    if (error instanceof Error) {
+      if (
+        error.message.includes("duplicate") ||
+        error.message.includes("unique")
+      ) {
+        return ApiErrors.duplicateEntry(context, "email");
+      }
     }
-    throw error; // Let withErrorHandling catch it
+    throw error;
   }
 });

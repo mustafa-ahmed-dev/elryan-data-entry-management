@@ -1,6 +1,6 @@
 /**
- * Activate Rule Set API
- * POST /api/rule-sets/[id]/activate - Activate rule set (deactivate others)
+ * Deactivate Rule Set API
+ * POST /api/rule-sets/[id]/deactivate - Deactivate the active rule set
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -17,14 +17,14 @@ import {
 } from "@/lib/api/errors";
 
 interface RouteParams {
-  params: Promise<{ id: string }>; // FIXED: Changed to Promise
+  params: Promise<{ id: string }>;
 }
 
-// POST /api/rule-sets/[id]/activate
+// POST /api/rule-sets/[id]/deactivate
 export const POST = withErrorHandling(
   async (request: NextRequest, routeContext: RouteParams) => {
     const context = await getRequestContext(request);
-    const params = await routeContext.params; // FIXED: Await params
+    const params = await routeContext.params;
 
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -59,13 +59,13 @@ export const POST = withErrorHandling(
       return ApiErrors.notFound(context, "Rule set");
     }
 
-    // Check if already active
-    if (ruleSet.isActive) {
+    // Check if already inactive
+    if (!ruleSet.isActive) {
       return NextResponse.json(
         {
           success: true,
           data: ruleSet,
-          message: `${ruleSet.name} is already the active rule set`,
+          message: `${ruleSet.name} is already inactive`,
         },
         {
           headers: {
@@ -75,21 +75,18 @@ export const POST = withErrorHandling(
       );
     }
 
-    // Step 1: Deactivate all rule sets
-    await db.update(evaluationRuleSets).set({ isActive: false });
-
-    // Step 2: Activate the selected rule set
-    const [activated] = await db
+    // Deactivate the rule set
+    const [deactivated] = await db
       .update(evaluationRuleSets)
-      .set({ isActive: true })
+      .set({ isActive: false })
       .where(eq(evaluationRuleSets.id, ruleSetId))
       .returning();
 
     return NextResponse.json(
       {
         success: true,
-        data: activated,
-        message: `${activated.name} is now the active rule set`,
+        data: deactivated,
+        message: `${deactivated.name} has been deactivated`,
       },
       {
         headers: {

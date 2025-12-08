@@ -12,13 +12,11 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
 interface CreateRuleSetInput {
   name: string;
   description?: string;
-  version: number;
 }
 
 interface UpdateRuleSetInput {
   name?: string;
   description?: string;
-  version?: number;
 }
 
 export function useRuleSets() {
@@ -26,6 +24,7 @@ export function useRuleSets() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isActivating, setIsActivating] = useState(false);
+  const [isDeactivating, setIsDeactivating] = useState(false); // NEW
 
   const url = "/api/rule-sets";
 
@@ -54,7 +53,6 @@ export function useRuleSets() {
           };
         }
 
-        // Refresh the rule sets list
         await mutate(url);
 
         return { success: true, data: result.data };
@@ -91,7 +89,6 @@ export function useRuleSets() {
           };
         }
 
-        // Refresh the rule sets list
         await mutate(url);
 
         return { success: true, data: result.data };
@@ -126,7 +123,6 @@ export function useRuleSets() {
           };
         }
 
-        // Refresh the rule sets list
         await mutate(url);
 
         return { success: true };
@@ -161,7 +157,6 @@ export function useRuleSets() {
           };
         }
 
-        // Refresh the rule sets list
         await mutate(url);
 
         return { success: true, message: result.message };
@@ -173,6 +168,42 @@ export function useRuleSets() {
         };
       } finally {
         setIsActivating(false);
+      }
+    },
+    [url]
+  );
+
+  // NEW: Deactivate rule set
+  const deactivateRuleSet = useCallback(
+    async (ruleSetId: number) => {
+      setIsDeactivating(true);
+      try {
+        const res = await fetch(`/api/rule-sets/${ruleSetId}/deactivate`, {
+          method: "POST",
+        });
+
+        const result = await res.json();
+
+        if (!res.ok) {
+          return {
+            success: false,
+            error: result.error || "Failed to deactivate rule set",
+          };
+        }
+
+        await mutate(url);
+
+        return { success: true, message: result.message };
+      } catch (err) {
+        return {
+          success: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : "Failed to deactivate rule set",
+        };
+      } finally {
+        setIsDeactivating(false);
       }
     },
     [url]
@@ -191,10 +222,12 @@ export function useRuleSets() {
     updateRuleSet,
     deleteRuleSet,
     activateRuleSet,
+    deactivateRuleSet, // NEW
     isCreating,
     isUpdating,
     isDeleting,
     isActivating,
+    isDeactivating, // NEW
     refresh,
   };
 }

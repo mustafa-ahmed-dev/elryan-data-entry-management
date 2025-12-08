@@ -215,16 +215,13 @@ export const scheduleHistory = pgTable("schedule_history", {
 // ============================================================================
 
 /**
- * Evaluation Rule Sets - Versioned sets of quality rules
- *
- * Different versions can be created over time as quality standards evolve
+ * Evaluation Rule Sets
  */
 export const evaluationRuleSets = pgTable("evaluation_rule_sets", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 200 }).notNull(),
   description: text("description"),
   isActive: boolean("is_active").default(false).notNull(),
-  version: integer("version").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

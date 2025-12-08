@@ -1,6 +1,6 @@
 /**
- * Rule Set Detail API Routes - WITH ENHANCED ERROR HANDLING
- * GET /api/rule-sets/[id] - Get rule set with rules
+ * Rule Set Detail API Routes
+ * GET /api/rule-sets/[id] - Get rule set details
  * PATCH /api/rule-sets/[id] - Update rule set
  * DELETE /api/rule-sets/[id] - Delete rule set
  */
@@ -10,11 +10,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { checkPermission } from "@/db/utils/permissions";
 import { db } from "@/db";
-import {
-  evaluationRuleSets,
-  evaluationRules,
-  qualityEvaluations,
-} from "@/db/schema";
+import { evaluationRuleSets, evaluationRules } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 import {
   ApiErrors,
@@ -23,23 +19,22 @@ import {
 } from "@/lib/api/errors";
 
 interface RouteParams {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
-// GET /api/rule-sets/[id] - Get rule set with rules
+// GET /api/rule-sets/[id]
 export const GET = withErrorHandling(
-  async (request: NextRequest, { params }: RouteParams) => {
-    // Get context FIRST
-    const context = await getRequestContext(request);
+  async (request: NextRequest, routeContext: RouteParams) => {
+    const reqContext = await getRequestContext(request);
+    const params = await routeContext.params;
 
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return ApiErrors.unauthorized(context);
+      return ApiErrors.unauthorized(reqContext);
     }
 
-    // Add user info to context
-    context.userId = session.user.id;
-    context.userEmail = session.user.email;
+    reqContext.userId = session.user.id;
+    reqContext.userEmail = session.user.email;
 
     const canRead = await checkPermission(
       session.user.id,
@@ -47,15 +42,14 @@ export const GET = withErrorHandling(
       "read"
     );
     if (!canRead) {
-      return ApiErrors.insufficientPermissions(context, "evaluations:read");
+      return ApiErrors.insufficientPermissions(reqContext, "evaluations:read");
     }
 
     const ruleSetId = parseInt(params.id);
     if (isNaN(ruleSetId)) {
-      return ApiErrors.invalidId(context, "Rule set");
+      return ApiErrors.invalidId(reqContext, "Rule set");
     }
 
-    // Get rule set
     const [ruleSet] = await db
       .select()
       .from(evaluationRuleSets)
@@ -63,71 +57,61 @@ export const GET = withErrorHandling(
       .limit(1);
 
     if (!ruleSet) {
-      return ApiErrors.notFound(context, "Rule set");
+      return ApiErrors.notFound(reqContext, "Rule set");
     }
-
-    // Get rules for this rule set
-    const rules = await db
-      .select()
-      .from(evaluationRules)
-      .where(eq(evaluationRules.ruleSetId, ruleSetId));
 
     return NextResponse.json(
       {
         success: true,
-        data: {
-          ...ruleSet,
-          rules,
-        },
+        data: ruleSet,
       },
       {
         headers: {
-          "X-Request-ID": context.requestId || "",
+          "X-Request-ID": reqContext.requestId || "",
         },
       }
     );
   }
 );
 
-// PATCH /api/rule-sets/[id] - Update rule set
+// PATCH /api/rule-sets/[id]
 export const PATCH = withErrorHandling(
-  async (request: NextRequest, { params }: RouteParams) => {
-    // Get context FIRST
-    const context = await getRequestContext(request);
+  async (request: NextRequest, routeContext: RouteParams) => {
+    const reqContext = await getRequestContext(request);
+    const params = await routeContext.params;
 
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return ApiErrors.unauthorized(context);
+      return ApiErrors.unauthorized(reqContext);
     }
 
-    // Add user info to context
-    context.userId = session.user.id;
-    context.userEmail = session.user.email;
+    reqContext.userId = session.user.id;
+    reqContext.userEmail = session.user.email;
 
     const canUpdate = await checkPermission(
       session.user.id,
       "evaluations",
-      "update",
-      "all"
+      "update"
     );
     if (!canUpdate) {
       return ApiErrors.insufficientPermissions(
-        context,
-        "evaluations:update:all"
+        reqContext,
+        "evaluations:update"
       );
     }
 
     const ruleSetId = parseInt(params.id);
     if (isNaN(ruleSetId)) {
-      return ApiErrors.invalidId(context, "Rule set");
+      return ApiErrors.invalidId(reqContext, "Rule set");
     }
 
     const body = await request.json();
 
+    // REMOVED: Version validation - version cannot be updated
     // Validate at least one field
-    if (!body.name && !body.description && body.version === undefined) {
+    if (!body.name && !body.description) {
       return ApiErrors.invalidInput(
-        context,
+        reqContext,
         "At least one field must be provided for update"
       );
     }
@@ -135,38 +119,27 @@ export const PATCH = withErrorHandling(
     // Validate name if provided
     if (body.name !== undefined) {
       if (typeof body.name !== "string" || body.name.trim().length === 0) {
-        return ApiErrors.invalidInput(context, "Name cannot be empty", "name");
+        return ApiErrors.invalidInput(
+          reqContext,
+          "Name cannot be empty",
+          "name"
+        );
       }
 
       if (body.name.length > 100) {
         return ApiErrors.invalidInput(
-          context,
+          reqContext,
           "Name must be 100 characters or less",
           "name"
         );
       }
     }
 
-    // Validate version if provided
-    if (body.version !== undefined) {
-      if (
-        typeof body.version !== "string" ||
-        body.version.trim().length === 0
-      ) {
-        return ApiErrors.invalidInput(
-          context,
-          "Version must be a non-empty string",
-          "version"
-        );
-      }
-    }
-
-    // Update rule set
+    // Update rule set (version cannot be changed)
     const updateData: any = {};
     if (body.name) updateData.name = body.name;
     if (body.description !== undefined)
       updateData.description = body.description;
-    if (body.version !== undefined) updateData.version = body.version;
 
     const [updated] = await db
       .update(evaluationRuleSets)
@@ -175,7 +148,7 @@ export const PATCH = withErrorHandling(
       .returning();
 
     if (!updated) {
-      return ApiErrors.notFound(context, "Rule set");
+      return ApiErrors.notFound(reqContext, "Rule set");
     }
 
     return NextResponse.json(
@@ -186,47 +159,45 @@ export const PATCH = withErrorHandling(
       },
       {
         headers: {
-          "X-Request-ID": context.requestId || "",
+          "X-Request-ID": reqContext.requestId || "",
         },
       }
     );
   }
 );
 
-// DELETE /api/rule-sets/[id] - Delete rule set
+// DELETE /api/rule-sets/[id]
 export const DELETE = withErrorHandling(
-  async (request: NextRequest, { params }: RouteParams) => {
-    // Get context FIRST
-    const context = await getRequestContext(request);
+  async (request: NextRequest, routeContext: RouteParams) => {
+    const reqContext = await getRequestContext(request);
+    const params = await routeContext.params;
 
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return ApiErrors.unauthorized(context);
+      return ApiErrors.unauthorized(reqContext);
     }
 
-    // Add user info to context
-    context.userId = session.user.id;
-    context.userEmail = session.user.email;
+    reqContext.userId = session.user.id;
+    reqContext.userEmail = session.user.email;
 
     const canDelete = await checkPermission(
       session.user.id,
       "evaluations",
-      "delete",
-      "all"
+      "delete"
     );
     if (!canDelete) {
       return ApiErrors.insufficientPermissions(
-        context,
-        "evaluations:delete:all"
+        reqContext,
+        "evaluations:delete"
       );
     }
 
     const ruleSetId = parseInt(params.id);
     if (isNaN(ruleSetId)) {
-      return ApiErrors.invalidId(context, "Rule set");
+      return ApiErrors.invalidId(reqContext, "Rule set");
     }
 
-    // Check if rule set exists
+    // Check if rule set is active
     const [ruleSet] = await db
       .select()
       .from(evaluationRuleSets)
@@ -234,46 +205,45 @@ export const DELETE = withErrorHandling(
       .limit(1);
 
     if (!ruleSet) {
-      return ApiErrors.notFound(context, "Rule set");
+      return ApiErrors.notFound(reqContext, "Rule set");
     }
 
-    // Check if rule set is active
     if (ruleSet.isActive) {
-      return ApiErrors.businessRuleViolation(
-        context,
+      return ApiErrors.invalidInput(
+        reqContext,
         "Cannot delete active rule set. Deactivate it first."
       );
     }
 
-    // Check if rule set has been used in evaluations
-    const [evaluationCount] = await db
+    // Check if rule set has associated rules
+    const [ruleCount] = await db
       .select({ count: sql<number>`count(*)` })
-      .from(qualityEvaluations)
-      .where(eq(qualityEvaluations.ruleSetId, ruleSetId));
-
-    const count = Number(evaluationCount.count);
-    if (count > 0) {
-      return ApiErrors.cannotDeleteInUse(context, "rule set", count);
-    }
-
-    // Delete associated rules first
-    await db
-      .delete(evaluationRules)
+      .from(evaluationRules)
       .where(eq(evaluationRules.ruleSetId, ruleSetId));
 
-    // Delete rule set
-    await db
+    const count = Number(ruleCount.count);
+
+    // Delete the rule set (cascade will handle rules if needed)
+    const [deleted] = await db
       .delete(evaluationRuleSets)
-      .where(eq(evaluationRuleSets.id, ruleSetId));
+      .where(eq(evaluationRuleSets.id, ruleSetId))
+      .returning();
+
+    if (!deleted) {
+      return ApiErrors.notFound(reqContext, "Rule set");
+    }
 
     return NextResponse.json(
       {
         success: true,
-        message: "Rule set deleted successfully",
+        message: `Rule set deleted successfully${
+          count > 0 ? ` along with ${count} associated rule(s)` : ""
+        }`,
+        data: { id: ruleSetId, deletedRules: count },
       },
       {
         headers: {
-          "X-Request-ID": context.requestId || "",
+          "X-Request-ID": reqContext.requestId || "",
         },
       }
     );
