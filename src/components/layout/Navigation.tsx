@@ -12,8 +12,6 @@ import { usePathname, useRouter } from "next/navigation";
 import type { MenuProps } from "antd";
 import {
   DashboardOutlined,
-  UserOutlined,
-  TeamOutlined,
   CalendarOutlined,
   FileTextOutlined,
   StarOutlined,

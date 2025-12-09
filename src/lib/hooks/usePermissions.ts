@@ -1,142 +1,243 @@
 /**
- * usePermissions Hook
- *
- * Provides permission checking with database-driven RBAC
- * Fetches and caches user permissions
+ * Permissions Hooks
+ * Enhanced with matrix and role-specific permission management
  */
 
-"use client";
+import useSWR from "swr";
+import { useState } from "react";
+import type {
+  PermissionMatrix,
+  BulkPermissionUpdate,
+  PermissionStatistics,
+} from "@/lib/types/auth";
 
-import { useState, useEffect, useCallback } from "react";
-import { useAuth } from "./useAuth";
-import type { ActionName, ResourceName, PermissionScope } from "../types/auth";
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
-interface Permission {
-  resource: string;
-  action: string;
-  scope: string;
+// ============================================================================
+// EXISTING HOOK (Current User Permissions)
+// ============================================================================
+
+/**
+ * Get current user's permissions
+ */
+export function usePermissions() {
+  const { data, error, mutate } = useSWR("/api/permissions", fetcher);
+
+  return {
+    permissions: data?.permissions || [],
+    role: data?.role,
+    teamId: data?.teamId,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+  };
 }
 
-interface UsePermissionsReturn {
-  permissions: Permission[];
-  isLoading: boolean;
-  can: (
-    action: ActionName,
-    resource: ResourceName,
-    scope?: PermissionScope
-  ) => boolean;
-  canViewAll: (resource: ResourceName) => boolean;
-  canViewTeam: (resource: ResourceName) => boolean;
-  canViewOwn: (resource: ResourceName) => boolean;
-  refetch: () => Promise<void>;
+// ============================================================================
+// NEW HOOKS FOR SECURITY SETTINGS PAGE
+// ============================================================================
+
+/**
+ * Get full permission matrix
+ */
+export function usePermissionMatrix() {
+  const { data, error, mutate } = useSWR<{
+    success: boolean;
+    data: PermissionMatrix;
+    timestamp: string;
+  }>("/api/permissions/matrix", fetcher);
+
+  return {
+    matrix: data?.data,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+  };
 }
 
-export function usePermissions(): UsePermissionsReturn {
-  const { user, isAuthenticated } = useAuth();
-  const [permissions, setPermissions] = useState<Permission[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+/**
+ * Update multiple permissions at once
+ */
+export function useUpdatePermissions() {
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Fetch user permissions from API
-  const fetchPermissions = useCallback(async () => {
-    if (!isAuthenticated || !user) {
-      setPermissions([]);
-      setIsLoading(false);
-      return;
-    }
+  const updatePermissions = async (update: BulkPermissionUpdate) => {
+    setIsUpdating(true);
+    setError(null);
 
     try {
-      setIsLoading(true);
+      const response = await fetch("/api/permissions/matrix", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(update),
+      });
 
-      const response = await fetch("/api/permissions");
+      const result = await response.json();
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch permissions");
+      if (!result.success) {
+        throw new Error(result.error || "Failed to update permissions");
       }
 
-      const data = await response.json();
-      setPermissions(data.permissions || []);
-    } catch (error) {
-      console.error("Error fetching permissions:", error);
-      setPermissions([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [isAuthenticated, user]);
-
-  // Fetch permissions on mount and when user changes
-  useEffect(() => {
-    fetchPermissions();
-  }, [fetchPermissions]);
-
-  // Check if user has a specific permission
-  const can = useCallback(
-    (
-      action: ActionName,
-      resource: ResourceName,
-      targetScope?: PermissionScope
-    ): boolean => {
-      if (!isAuthenticated) return false;
-
-      // Find matching permission
-      const permission = permissions.find(
-        (p) => p.resource === resource && p.action === action
-      );
-
-      if (!permission) return false;
-
-      // If no specific scope required, permission exists
-      if (!targetScope) return true;
-
-      // Check scope hierarchy: 'all' > 'team' > 'own'
-      const scopeHierarchy: Record<string, number> = {
-        own: 1,
-        team: 2,
-        all: 3,
+      return {
+        success: true,
+        updated: result.updated,
+        errors: result.errors,
       };
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Unknown error occurred";
+      setError(errorMessage);
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
-      const userScopeLevel = scopeHierarchy[permission.scope] || 0;
-      const requiredScopeLevel = scopeHierarchy[targetScope] || 0;
+  return {
+    updatePermissions,
+    isUpdating,
+    error,
+  };
+}
 
-      return userScopeLevel >= requiredScopeLevel;
-    },
-    [isAuthenticated, permissions]
-  );
-
-  // Check if user can view all records of a resource
-  const canViewAll = useCallback(
-    (resource: ResourceName): boolean => {
-      return can("read", resource, "all");
-    },
-    [can]
-  );
-
-  // Check if user can view team records of a resource
-  const canViewTeam = useCallback(
-    (resource: ResourceName): boolean => {
-      return can("read", resource, "team") || can("read", resource, "all");
-    },
-    [can]
-  );
-
-  // Check if user can view their own records of a resource
-  const canViewOwn = useCallback(
-    (resource: ResourceName): boolean => {
-      return (
-        can("read", resource, "own") ||
-        can("read", resource, "team") ||
-        can("read", resource, "all")
-      );
-    },
-    [can]
+/**
+ * Get permissions for a specific role
+ */
+export function useRolePermissions(roleId: number | null) {
+  const { data, error, mutate } = useSWR(
+    roleId ? `/api/permissions/role/${roleId}` : null,
+    fetcher
   );
 
   return {
-    permissions,
+    permissions: data?.data || [],
+    count: data?.count || 0,
+    isLoading: !error && !data && roleId !== null,
+    isError: error,
+    refresh: mutate,
+  };
+}
+
+/**
+ * Update permissions for a specific role
+ */
+export function useUpdateRolePermissions() {
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const updateRolePermissions = async (
+    roleId: number,
+    updates: BulkPermissionUpdate["updates"]
+  ) => {
+    setIsUpdating(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/permissions/role/${roleId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ updates }),
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || "Failed to update role permissions");
+      }
+
+      return {
+        success: true,
+        updated: result.updated,
+        errors: result.errors,
+      };
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Unknown error occurred";
+      setError(errorMessage);
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  return {
+    updateRolePermissions,
+    isUpdating,
+    error,
+  };
+}
+
+/**
+ * Get permission statistics
+ */
+export function usePermissionStatistics() {
+  const { data, error, mutate } = useSWR<{
+    success: boolean;
+    data: PermissionStatistics & {
+      roles: Array<{
+        id: number;
+        name: string;
+        displayName: string;
+        permissionCount: number;
+      }>;
+    };
+    timestamp: string;
+  }>("/api/permissions/statistics", fetcher);
+
+  return {
+    statistics: data?.data,
+    isLoading: !error && !data,
+    isError: error,
+    refresh: mutate,
+  };
+}
+
+/**
+ * Check if user has specific permission
+ */
+export function useHasPermission(resource: string, action: string) {
+  const { permissions, isLoading } = usePermissions();
+
+  const hasPermission = permissions.some(
+    (p: any) => p.resource === resource && p.action === action
+  );
+
+  return {
+    hasPermission,
     isLoading,
-    can,
-    canViewAll,
-    canViewTeam,
-    canViewOwn,
-    refetch: fetchPermissions,
+  };
+}
+
+/**
+ * Check multiple permissions at once
+ */
+export function useHasPermissions(
+  checks: Array<{ resource: string; action: string }>
+) {
+  const { permissions, isLoading } = usePermissions();
+
+  const results: Record<string, boolean> = {};
+
+  checks.forEach((check) => {
+    const key = `${check.resource}:${check.action}`;
+    results[key] = permissions.some(
+      (p: any) => p.resource === check.resource && p.action === check.action
+    );
+  });
+
+  return {
+    permissions: results,
+    isLoading,
   };
 }
