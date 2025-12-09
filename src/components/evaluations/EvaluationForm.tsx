@@ -21,6 +21,7 @@ import {
   Divider,
 } from "antd";
 import { PlusOutlined, MinusCircleOutlined } from "@ant-design/icons";
+import { RuleSetSelect } from "./RuleSetSelect";
 
 interface Violation {
   ruleId: number;
@@ -212,7 +213,7 @@ export function EvaluationForm({
         <Divider>Score</Divider>
 
         <Alert
-          message={
+          title={
             <div>
               <strong>Calculated Score:</strong>{" "}
               <Tag

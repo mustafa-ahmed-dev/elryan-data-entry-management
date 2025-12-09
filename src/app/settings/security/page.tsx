@@ -50,7 +50,7 @@ function SecuritySettingsContent() {
       children: (
         <div>
           <Alert
-            message="Manage Role-Based Permissions"
+            title="Manage Role-Based Permissions"
             description="Configure which actions each role can perform on system resources. Changes take effect immediately for all users with that role."
             type="info"
             showIcon
@@ -74,7 +74,7 @@ function SecuritySettingsContent() {
       children: (
         <div>
           <Alert
-            message="Configure Security Policies"
+            title="Configure Security Policies"
             description="Set password requirements, session timeouts, and login security settings. These policies apply to all users system-wide."
             type="info"
             showIcon
@@ -95,7 +95,7 @@ function SecuritySettingsContent() {
       children: (
         <div>
           <Alert
-            message="Permission Change History"
+            title="Permission Change History"
             description="View a complete history of all permission changes, including who made the change, when, and what was modified."
             type="info"
             showIcon

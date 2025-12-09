@@ -137,7 +137,7 @@ export function TeamForm({
 
         {team && (
           <Alert
-            message="Team Leader Change"
+            title="Team Leader Change"
             description="Changing the team leader will update all associated schedules and permissions."
             type="warning"
             showIcon

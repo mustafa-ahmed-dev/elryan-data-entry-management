@@ -1,13 +1,14 @@
 /**
  * Permissions Matrix Component
- * Interactive grid for managing role-based permissions
+ * Card-based view for managing role-based permissions
+ * More intuitive for non-technical users
  */
 
 "use client";
 
 import { useState, useMemo } from "react";
 import {
-  Table,
+  Card,
   Switch,
   Select,
   Tag,
@@ -15,11 +16,17 @@ import {
   Button,
   message,
   Tooltip,
+  Row,
+  Col,
+  Divider,
+  Typography,
 } from "antd";
 import {
   SaveOutlined,
   ReloadOutlined,
   InfoCircleOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
 } from "@ant-design/icons";
 import {
   usePermissionMatrix,
@@ -27,12 +34,67 @@ import {
 } from "@/lib/hooks/usePermissions";
 import type { PermissionScope } from "@/lib/types/auth";
 
+const { Title, Text } = Typography;
+
 interface PermissionChange {
   resourceId: number;
   actionId: number;
   granted: boolean;
   scope: PermissionScope;
 }
+
+// Define which actions are relevant for each resource
+const RESOURCE_ACTIONS: Record<string, string[]> = {
+  users: ["create", "read", "update", "delete"],
+  teams: ["create", "read", "update", "delete"],
+  schedules: ["create", "read", "update", "delete", "approve", "reject"],
+  entries: ["create", "read", "update", "delete"],
+  evaluations: ["create", "read", "update", "delete"],
+  reports: ["read"],
+  settings: ["read", "update"],
+};
+
+// Resource icons and descriptions
+const RESOURCE_INFO: Record<
+  string,
+  { icon: string; color: string; description: string }
+> = {
+  users: {
+    icon: "👥",
+    color: "#1890ff",
+    description: "Manage user accounts and profiles",
+  },
+  teams: {
+    icon: "🏢",
+    color: "#52c41a",
+    description: "Manage teams and departments",
+  },
+  schedules: {
+    icon: "📅",
+    color: "#722ed1",
+    description: "Create and approve work schedules",
+  },
+  entries: {
+    icon: "📝",
+    color: "#fa8c16",
+    description: "Data entry management",
+  },
+  evaluations: {
+    icon: "⭐",
+    color: "#eb2f96",
+    description: "Quality evaluations and scoring",
+  },
+  reports: {
+    icon: "📊",
+    color: "#13c2c2",
+    description: "View analytics and reports",
+  },
+  settings: {
+    icon: "⚙️",
+    color: "#8c8c8c",
+    description: "System settings and configuration",
+  },
+};
 
 export function PermissionsMatrix() {
   const { matrix, isLoading, refresh } = usePermissionMatrix();
@@ -55,117 +117,44 @@ export function PermissionsMatrix() {
   // Get permissions for selected role
   const rolePermissions = useMemo(() => {
     if (!matrix || !selectedRole) return [];
-
     return matrix.permissions.filter((p) => p.roleId === selectedRole);
   }, [matrix, selectedRole]);
 
-  // Build table data
-  const tableData = useMemo(() => {
+  // Group permissions by resource
+  const groupedPermissions = useMemo(() => {
     if (!matrix || !selectedRole) return [];
 
-    const data: any[] = [];
-
-    matrix.resources.forEach((resource) => {
-      const row: any = {
-        key: resource.id,
-        resourceId: resource.id,
-        resource: resource.displayName,
-        resourceName: resource.name,
-      };
-
-      matrix.actions.forEach((action) => {
-        const permission = rolePermissions.find(
-          (p) => p.resourceId === resource.id && p.actionId === action.id
-        );
-
-        const changeKey = `${resource.id}-${action.id}`;
-        const change = changes.get(changeKey);
-
-        row[`action_${action.id}`] = {
-          actionId: action.id,
-          granted: change?.granted ?? permission?.granted ?? false,
-          scope: change?.scope ?? permission?.scope ?? "own",
-          permissionId: permission?.permissionId,
-        };
-      });
-
-      data.push(row);
-    });
-
-    return data;
-  }, [matrix, selectedRole, rolePermissions, changes]);
-
-  // Build columns
-  const columns = useMemo(() => {
-    if (!matrix) return [];
-
-    const cols: any[] = [
-      {
-        title: "Resource",
-        dataIndex: "resource",
-        key: "resource",
-        fixed: "left",
-        width: 150,
-        render: (text: string, record: any) => (
-          <Tooltip title={record.resourceName}>
-            <strong>{text}</strong>
-          </Tooltip>
-        ),
-      },
-    ];
-
-    matrix.actions.forEach((action) => {
-      cols.push({
-        title: (
-          <Tooltip title={action.description || action.displayName}>
-            {action.displayName}
-          </Tooltip>
-        ),
-        dataIndex: `action_${action.id}`,
-        key: `action_${action.id}`,
-        width: 180,
-        align: "center" as const,
-        render: (value: any, record: any) => {
-          const changeKey = `${record.resourceId}-${action.id}`;
-
-          return (
-            <Space direction="vertical" size="small" style={{ width: "100%" }}>
-              <Switch
-                checked={value.granted}
-                onChange={(checked) =>
-                  handlePermissionChange(
-                    record.resourceId,
-                    action.id,
-                    checked,
-                    value.scope
-                  )
-                }
-                checkedChildren="✓"
-                unCheckedChildren="✗"
-              />
-              {value.granted && (
-                <Select
-                  value={value.scope}
-                  onChange={(scope) =>
-                    handleScopeChange(record.resourceId, action.id, scope)
-                  }
-                  size="small"
-                  style={{ width: "100%" }}
-                  options={[
-                    { value: "own", label: "Own" },
-                    { value: "team", label: "Team" },
-                    { value: "all", label: "All" },
-                  ]}
-                />
-              )}
-            </Space>
+    return matrix.resources.map((resource) => {
+      const relevantActions = RESOURCE_ACTIONS[resource.name] || [];
+      const actions = matrix.actions
+        .filter((action) => relevantActions.includes(action.name))
+        .map((action) => {
+          const permission = rolePermissions.find(
+            (p) => p.resourceId === resource.id && p.actionId === action.id
           );
-        },
-      });
-    });
 
-    return cols;
-  }, [matrix]);
+          const changeKey = `${resource.id}-${action.id}`;
+          const change = changes.get(changeKey);
+
+          return {
+            action,
+            granted: change?.granted ?? permission?.granted ?? false,
+            scope: change?.scope ?? permission?.scope ?? "own",
+            permissionId: permission?.permissionId,
+          };
+        });
+
+      return {
+        resource,
+        actions,
+        info: RESOURCE_INFO[resource.name] || {
+          icon: "📦",
+          color: "#666",
+          description: resource.description || "",
+        },
+      };
+    });
+  }, [matrix, selectedRole, rolePermissions, changes]);
 
   // Handle permission toggle
   const handlePermissionChange = (
@@ -249,7 +238,7 @@ export function PermissionsMatrix() {
       {/* Header Controls */}
       <Space
         style={{
-          marginBottom: 16,
+          marginBottom: 24,
           width: "100%",
           justifyContent: "space-between",
         }}
@@ -294,39 +283,159 @@ export function PermissionsMatrix() {
 
       {/* Permission Scope Legend */}
       {selectedRole && (
-        <div style={{ marginBottom: 16 }}>
-          <Space>
-            <span>Permission Scopes:</span>
-            <Tag color="blue">Own - User&apos;s own resources only</Tag>
-            <Tag color="green">Team - Team resources only</Tag>
-            <Tag color="purple">All - All resources system-wide</Tag>
+        <Card size="small" style={{ marginBottom: 24, background: "#fafafa" }}>
+          <Space wrap>
+            <Text strong>Permission Scopes:</Text>
+            <Tag color="blue">Own - User&apos;s own data only</Tag>
+            <Tag color="green">Team - Team data only</Tag>
+            <Tag color="purple">All - All data system-wide</Tag>
           </Space>
-        </div>
+        </Card>
       )}
 
-      {/* Permissions Table */}
+      {/* Permissions Cards */}
       {selectedRole ? (
-        <Table
-          columns={columns}
-          dataSource={tableData}
-          pagination={false}
-          scroll={{ x: 1200, y: 600 }}
-          bordered
-          size="small"
-        />
+        <Row gutter={[16, 16]}>
+          {groupedPermissions.map(({ resource, actions, info }) => (
+            <Col xs={24} lg={12} xl={8} key={resource.id}>
+              <Card
+                title={
+                  <Space>
+                    <span style={{ fontSize: 24 }}>{info.icon}</span>
+                    <span>
+                      <strong>{resource.displayName}</strong>
+                      <br />
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {info.description}
+                      </Text>
+                    </span>
+                  </Space>
+                }
+                bordered
+                style={{
+                  borderLeft: `4px solid ${info.color}`,
+                  height: "100%",
+                }}
+              >
+                <Space
+                  direction="vertical"
+                  style={{ width: "100%" }}
+                  size="middle"
+                >
+                  {actions.map(({ action, granted, scope }) => (
+                    <div key={action.id}>
+                      <Space
+                        style={{
+                          width: "100%",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <Space>
+                          {granted ? (
+                            <CheckCircleOutlined
+                              style={{ color: "#52c41a", fontSize: 16 }}
+                            />
+                          ) : (
+                            <CloseCircleOutlined
+                              style={{ color: "#d9d9d9", fontSize: 16 }}
+                            />
+                          )}
+                          <Tooltip title={action.description}>
+                            <Text strong={granted}>{action.displayName}</Text>
+                          </Tooltip>
+                        </Space>
+
+                        <Switch
+                          checked={granted}
+                          onChange={(checked) =>
+                            handlePermissionChange(
+                              resource.id,
+                              action.id,
+                              checked,
+                              scope
+                            )
+                          }
+                          size="small"
+                        />
+                      </Space>
+
+                      {granted && (
+                        <div style={{ marginTop: 8, marginLeft: 24 }}>
+                          <Select
+                            value={scope}
+                            onChange={(newScope) =>
+                              handleScopeChange(
+                                resource.id,
+                                action.id,
+                                newScope
+                              )
+                            }
+                            size="small"
+                            style={{ width: "100%" }}
+                            options={[
+                              {
+                                value: "own",
+                                label: (
+                                  <Space>
+                                    <Tag color="blue">Own</Tag>
+                                    <Text type="secondary">
+                                      User&apos;s own only
+                                    </Text>
+                                  </Space>
+                                ),
+                              },
+                              {
+                                value: "team",
+                                label: (
+                                  <Space>
+                                    <Tag color="green">Team</Tag>
+                                    <Text type="secondary">Team data only</Text>
+                                  </Space>
+                                ),
+                              },
+                              {
+                                value: "all",
+                                label: (
+                                  <Space>
+                                    <Tag color="purple">All</Tag>
+                                    <Text type="secondary">System-wide</Text>
+                                  </Space>
+                                ),
+                              },
+                            ]}
+                          />
+                        </div>
+                      )}
+
+                      {action.id !== actions[actions.length - 1].action.id && (
+                        <Divider style={{ margin: "8px 0" }} />
+                      )}
+                    </div>
+                  ))}
+                </Space>
+              </Card>
+            </Col>
+          ))}
+        </Row>
       ) : (
-        <div
+        <Card
           style={{
             textAlign: "center",
             padding: 60,
             background: "#fafafa",
-            borderRadius: 8,
           }}
         >
-          <p style={{ fontSize: 16, color: "#999" }}>
-            Select a role from the dropdown above to manage its permissions
-          </p>
-        </div>
+          <Space direction="vertical" size="large">
+            <div style={{ fontSize: 48 }}>🔐</div>
+            <div>
+              <Title level={4}>Select a Role to Manage Permissions</Title>
+              <Text type="secondary">
+                Choose a role from the dropdown above to view and configure its
+                permissions
+              </Text>
+            </div>
+          </Space>
+        </Card>
       )}
     </div>
   );

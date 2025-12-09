@@ -115,7 +115,7 @@ export default function LoginPage() {
           {/* Error Alert */}
           {error && (
             <Alert
-              message="Login Failed"
+              title="Login Failed"
               description={error}
               type="error"
               showIcon

@@ -154,7 +154,7 @@ export function RuleForm({
         </Form.Item>
 
         <Alert
-          message="Scoring Example"
+          title="Scoring Example"
           description={
             <div>
               <p style={{ marginBottom: "8px" }}>

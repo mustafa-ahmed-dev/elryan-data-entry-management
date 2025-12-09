@@ -4,11 +4,14 @@
  */
 
 import useSWR from "swr";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { useAuth } from "./useAuth";
+import { ROLES } from "../constants/roles";
 import type {
   PermissionMatrix,
   BulkPermissionUpdate,
   PermissionStatistics,
+  PermissionScope,
 } from "@/lib/types/auth";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
@@ -18,10 +21,33 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
 // ============================================================================
 
 /**
- * Get current user's permissions
+ * Get current user's permissions with enhanced can() method
  */
 export function usePermissions() {
   const { data, error, mutate } = useSWR("/api/permissions", fetcher);
+  const { user } = useAuth();
+
+  // Enhanced can() method that checks actual permissions from database
+  const can = useMemo(
+    () => (action: string, resource: string, scope?: PermissionScope) => {
+      if (!user) return false;
+
+      // Admin can do everything
+      if (user.roleName === ROLES.ADMIN) return true;
+
+      // Check actual permissions from the database
+      const permissions = data?.permissions || [];
+
+      return permissions.some((permission: any) => {
+        const actionMatch = permission.action === action;
+        const resourceMatch = permission.resource === resource;
+        const scopeMatch = !scope || permission.scope === scope;
+
+        return actionMatch && resourceMatch && scopeMatch;
+      });
+    },
+    [user, data]
+  );
 
   return {
     permissions: data?.permissions || [],
@@ -30,6 +56,7 @@ export function usePermissions() {
     isLoading: !error && !data,
     isError: error,
     refresh: mutate,
+    can, // Now included!
   };
 }
 

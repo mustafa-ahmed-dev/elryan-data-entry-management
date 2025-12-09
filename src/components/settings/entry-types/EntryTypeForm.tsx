@@ -95,7 +95,7 @@ export function EntryTypeForm({
         </Form.Item>
 
         <Alert
-          message="Entry Type Usage"
+          title="Entry Type Usage"
           description="Entry types categorize the different kinds of data entries in your system. Employees will select an entry type when creating new entries."
           type="info"
           showIcon

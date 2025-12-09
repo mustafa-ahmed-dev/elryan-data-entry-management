@@ -486,3 +486,38 @@ export interface SecuritySettingsValidationError {
   message: string;
   value?: any;
 }
+
+/**
+ * Action names used throughout the system
+ * Based on the actions table in the database
+ */
+export type ActionName =
+  | "create"
+  | "read"
+  | "update"
+  | "delete"
+  | "approve"
+  | "reject"
+  | "evaluate";
+
+/**
+ * Resource names used throughout the system
+ * Based on the resources table in the database
+ */
+export type ResourceName =
+  | "users"
+  | "teams"
+  | "schedules"
+  | "entries"
+  | "evaluations"
+  | "reports"
+  | "settings";
+
+/**
+ * Helper type for permission checks
+ */
+export interface PermissionCheckParams {
+  action: ActionName;
+  resource: ResourceName;
+  scope?: PermissionScope;
+}

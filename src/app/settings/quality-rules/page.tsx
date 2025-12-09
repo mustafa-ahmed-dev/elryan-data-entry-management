@@ -291,7 +291,7 @@ function QualityRulesContent() {
 
                 {!activeRuleSet && totalRuleSets > 0 && (
                   <Alert
-                    message="No Active Rule Set"
+                    title="No Active Rule Set"
                     description="Please activate a rule set to use it for evaluations. Click the star icon next to a rule set to activate it."
                     type="warning"
                     showIcon
@@ -301,7 +301,7 @@ function QualityRulesContent() {
 
                 {totalRuleSets === 0 && !ruleSetsLoading && (
                   <Alert
-                    message="Get Started"
+                    title="Get Started"
                     description="Create your first rule set to define quality standards for evaluations."
                     type="info"
                     showIcon

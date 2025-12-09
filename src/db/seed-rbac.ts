@@ -7,63 +7,75 @@
 
 import { db } from "./index";
 import { roles, resources, actions, permissions } from "./schema";
+import { eq } from "drizzle-orm";
 
 async function seedRBAC() {
   console.log("🌱 Seeding RBAC tables...");
 
   try {
     // ========================================================================
-    // 1. SEED ROLES
+    // 1. SEED ROLES (or get existing)
     // ========================================================================
     console.log("📝 Seeding roles...");
 
-    const [adminRole] = await db
+    // Try to insert, but if they exist, query them
+    await db
       .insert(roles)
-      .values({
-        name: "admin",
-        displayName: "Administrator",
-        description:
-          "Full system access - can manage all users, teams, and data",
-        hierarchy: 3,
-        isActive: true,
-      })
-      .onConflictDoNothing()
-      .returning();
+      .values([
+        {
+          name: "admin",
+          displayName: "Administrator",
+          description:
+            "Full system access - can manage all users, teams, and data",
+          hierarchy: 3,
+          isActive: true,
+        },
+        {
+          name: "team_leader",
+          displayName: "Team Leader",
+          description:
+            "Manages team members - can create schedules and evaluate performance",
+          hierarchy: 2,
+          isActive: true,
+        },
+        {
+          name: "employee",
+          displayName: "Employee",
+          description:
+            "Basic access - can enter data and view personal schedules",
+          hierarchy: 1,
+          isActive: true,
+        },
+      ])
+      .onConflictDoNothing();
+
+    // Now query to get the IDs
+    const [adminRole] = await db
+      .select()
+      .from(roles)
+      .where(eq(roles.name, "admin"))
+      .limit(1);
 
     const [teamLeaderRole] = await db
-      .insert(roles)
-      .values({
-        name: "team_leader",
-        displayName: "Team Leader",
-        description:
-          "Manages team members - can create schedules and evaluate performance",
-        hierarchy: 2,
-        isActive: true,
-      })
-      .onConflictDoNothing()
-      .returning();
+      .select()
+      .from(roles)
+      .where(eq(roles.name, "team_leader"))
+      .limit(1);
 
     const [employeeRole] = await db
-      .insert(roles)
-      .values({
-        name: "employee",
-        displayName: "Employee",
-        description:
-          "Basic access - can enter data and view personal schedules",
-        hierarchy: 1,
-        isActive: true,
-      })
-      .onConflictDoNothing()
-      .returning();
+      .select()
+      .from(roles)
+      .where(eq(roles.name, "employee"))
+      .limit(1);
 
-    console.log("✅ Roles seeded:", {
+    console.log("✅ Roles ready:", {
       admin: adminRole?.id,
       team_leader: teamLeaderRole?.id,
       employee: employeeRole?.id,
     });
 
     // ========================================================================
-    // 2. SEED RESOURCES
+    // 2. SEED RESOURCES (or get existing)
     // ========================================================================
     console.log("📝 Seeding resources...");
 
@@ -86,22 +98,25 @@ async function seedRBAC() {
         displayName: "Reports",
         description: "Analytics and reports",
       },
+      {
+        name: "settings",
+        displayName: "Settings",
+        description: "System settings and permissions",
+      },
     ];
 
-    const insertedResources = await db
-      .insert(resources)
-      .values(resourcesList)
-      .onConflictDoNothing()
-      .returning();
+    await db.insert(resources).values(resourcesList).onConflictDoNothing();
 
+    // Query to get all resources with their IDs
+    const allResources = await db.select().from(resources);
     const resourceMap = Object.fromEntries(
-      insertedResources.map((r) => [r.name, r.id])
+      allResources.map((r) => [r.name, r.id])
     );
 
-    console.log("✅ Resources seeded:", resourceMap);
+    console.log("✅ Resources ready:", resourceMap);
 
     // ========================================================================
-    // 3. SEED ACTIONS
+    // 3. SEED ACTIONS (or get existing)
     // ========================================================================
     console.log("📝 Seeding actions...");
 
@@ -109,34 +124,31 @@ async function seedRBAC() {
       {
         name: "create",
         displayName: "Create",
-        description: "Create new records",
+        description: "Create new items",
       },
-      { name: "read", displayName: "Read", description: "View records" },
-      { name: "update", displayName: "Update", description: "Edit records" },
-      { name: "delete", displayName: "Delete", description: "Remove records" },
+      { name: "read", displayName: "Read", description: "View items" },
+      { name: "update", displayName: "Update", description: "Modify items" },
+      { name: "delete", displayName: "Delete", description: "Remove items" },
       {
         name: "approve",
         displayName: "Approve",
-        description: "Approve pending items",
+        description: "Approve requests",
       },
+      { name: "reject", displayName: "Reject", description: "Reject requests" },
       {
-        name: "reject",
-        displayName: "Reject",
-        description: "Reject pending items",
+        name: "evaluate",
+        displayName: "Evaluate",
+        description: "Perform evaluations",
       },
     ];
 
-    const insertedActions = await db
-      .insert(actions)
-      .values(actionsList)
-      .onConflictDoNothing()
-      .returning();
+    await db.insert(actions).values(actionsList).onConflictDoNothing();
 
-    const actionMap = Object.fromEntries(
-      insertedActions.map((a) => [a.name, a.id])
-    );
+    // Query to get all actions with their IDs
+    const allActions = await db.select().from(actions);
+    const actionMap = Object.fromEntries(allActions.map((a) => [a.name, a.id]));
 
-    console.log("✅ Actions seeded:", actionMap);
+    console.log("✅ Actions ready:", actionMap);
 
     // ========================================================================
     // 4. SEED PERMISSIONS
@@ -153,25 +165,25 @@ async function seedRBAC() {
         roleId: adminRole.id,
         resourceId: resourceMap.users,
         actionId: actionMap.create,
-        scope: "all",
+        scope: "all" as const,
       },
       {
         roleId: adminRole.id,
         resourceId: resourceMap.users,
         actionId: actionMap.read,
-        scope: "all",
+        scope: "all" as const,
       },
       {
         roleId: adminRole.id,
         resourceId: resourceMap.users,
         actionId: actionMap.update,
-        scope: "all",
+        scope: "all" as const,
       },
       {
         roleId: adminRole.id,
         resourceId: resourceMap.users,
         actionId: actionMap.delete,
-        scope: "all",
+        scope: "all" as const,
       },
 
       // Teams - Full CRUD
@@ -179,25 +191,25 @@ async function seedRBAC() {
         roleId: adminRole.id,
         resourceId: resourceMap.teams,
         actionId: actionMap.create,
-        scope: "all",
+        scope: "all" as const,
       },
       {
         roleId: adminRole.id,
         resourceId: resourceMap.teams,
         actionId: actionMap.read,
-        scope: "all",
+        scope: "all" as const,
       },
       {
         roleId: adminRole.id,
         resourceId: resourceMap.teams,
         actionId: actionMap.update,
-        scope: "all",
+        scope: "all" as const,
       },
       {
         roleId: adminRole.id,
         resourceId: resourceMap.teams,
         actionId: actionMap.delete,
-        scope: "all",
+        scope: "all" as const,
       },
 
       // Schedules - Full CRUD + Approve/Reject
@@ -205,63 +217,63 @@ async function seedRBAC() {
         roleId: adminRole.id,
         resourceId: resourceMap.schedules,
         actionId: actionMap.create,
-        scope: "all",
+        scope: "all" as const,
       },
       {
         roleId: adminRole.id,
         resourceId: resourceMap.schedules,
         actionId: actionMap.read,
-        scope: "all",
+        scope: "all" as const,
       },
       {
         roleId: adminRole.id,
         resourceId: resourceMap.schedules,
         actionId: actionMap.update,
-        scope: "all",
+        scope: "all" as const,
       },
       {
         roleId: adminRole.id,
         resourceId: resourceMap.schedules,
         actionId: actionMap.delete,
-        scope: "all",
+        scope: "all" as const,
       },
       {
         roleId: adminRole.id,
         resourceId: resourceMap.schedules,
         actionId: actionMap.approve,
-        scope: "all",
+        scope: "all" as const,
       },
       {
         roleId: adminRole.id,
         resourceId: resourceMap.schedules,
         actionId: actionMap.reject,
-        scope: "all",
+        scope: "all" as const,
       },
 
-      // Entries - Full CRUD (FIXED: Added create and update)
+      // Entries - Full CRUD
       {
         roleId: adminRole.id,
         resourceId: resourceMap.entries,
         actionId: actionMap.create,
-        scope: "all",
+        scope: "all" as const,
       },
       {
         roleId: adminRole.id,
         resourceId: resourceMap.entries,
         actionId: actionMap.read,
-        scope: "all",
+        scope: "all" as const,
       },
       {
         roleId: adminRole.id,
         resourceId: resourceMap.entries,
         actionId: actionMap.update,
-        scope: "all",
+        scope: "all" as const,
       },
       {
         roleId: adminRole.id,
         resourceId: resourceMap.entries,
         actionId: actionMap.delete,
-        scope: "all",
+        scope: "all" as const,
       },
 
       // Evaluations - Full CRUD
@@ -269,25 +281,25 @@ async function seedRBAC() {
         roleId: adminRole.id,
         resourceId: resourceMap.evaluations,
         actionId: actionMap.create,
-        scope: "all",
+        scope: "all" as const,
       },
       {
         roleId: adminRole.id,
         resourceId: resourceMap.evaluations,
         actionId: actionMap.read,
-        scope: "all",
+        scope: "all" as const,
       },
       {
         roleId: adminRole.id,
         resourceId: resourceMap.evaluations,
         actionId: actionMap.update,
-        scope: "all",
+        scope: "all" as const,
       },
       {
         roleId: adminRole.id,
         resourceId: resourceMap.evaluations,
         actionId: actionMap.delete,
-        scope: "all",
+        scope: "all" as const,
       },
 
       // Reports - Read access
@@ -295,7 +307,33 @@ async function seedRBAC() {
         roleId: adminRole.id,
         resourceId: resourceMap.reports,
         actionId: actionMap.read,
-        scope: "all",
+        scope: "all" as const,
+      },
+
+      // Settings - Full CRUD (NEW!)
+      {
+        roleId: adminRole.id,
+        resourceId: resourceMap.settings,
+        actionId: actionMap.create,
+        scope: "all" as const,
+      },
+      {
+        roleId: adminRole.id,
+        resourceId: resourceMap.settings,
+        actionId: actionMap.read,
+        scope: "all" as const,
+      },
+      {
+        roleId: adminRole.id,
+        resourceId: resourceMap.settings,
+        actionId: actionMap.update,
+        scope: "all" as const,
+      },
+      {
+        roleId: adminRole.id,
+        resourceId: resourceMap.settings,
+        actionId: actionMap.delete,
+        scope: "all" as const,
       },
 
       // =====================================================================
@@ -307,7 +345,7 @@ async function seedRBAC() {
         roleId: teamLeaderRole.id,
         resourceId: resourceMap.users,
         actionId: actionMap.read,
-        scope: "team",
+        scope: "team" as const,
       },
 
       // Teams - Read own team
@@ -315,7 +353,7 @@ async function seedRBAC() {
         roleId: teamLeaderRole.id,
         resourceId: resourceMap.teams,
         actionId: actionMap.read,
-        scope: "own",
+        scope: "own" as const,
       },
 
       // Schedules - Create for team, read team, update team
@@ -323,19 +361,19 @@ async function seedRBAC() {
         roleId: teamLeaderRole.id,
         resourceId: resourceMap.schedules,
         actionId: actionMap.create,
-        scope: "team",
+        scope: "team" as const,
       },
       {
         roleId: teamLeaderRole.id,
         resourceId: resourceMap.schedules,
         actionId: actionMap.read,
-        scope: "team",
+        scope: "team" as const,
       },
       {
         roleId: teamLeaderRole.id,
         resourceId: resourceMap.schedules,
         actionId: actionMap.update,
-        scope: "team",
+        scope: "team" as const,
       },
 
       // Entries - Read team entries
@@ -343,7 +381,7 @@ async function seedRBAC() {
         roleId: teamLeaderRole.id,
         resourceId: resourceMap.entries,
         actionId: actionMap.read,
-        scope: "team",
+        scope: "team" as const,
       },
 
       // Evaluations - Create/Read/Update for team
@@ -351,19 +389,19 @@ async function seedRBAC() {
         roleId: teamLeaderRole.id,
         resourceId: resourceMap.evaluations,
         actionId: actionMap.create,
-        scope: "team",
+        scope: "team" as const,
       },
       {
         roleId: teamLeaderRole.id,
         resourceId: resourceMap.evaluations,
         actionId: actionMap.read,
-        scope: "team",
+        scope: "team" as const,
       },
       {
         roleId: teamLeaderRole.id,
         resourceId: resourceMap.evaluations,
         actionId: actionMap.update,
-        scope: "team",
+        scope: "team" as const,
       },
 
       // Reports - Read team reports
@@ -371,7 +409,7 @@ async function seedRBAC() {
         roleId: teamLeaderRole.id,
         resourceId: resourceMap.reports,
         actionId: actionMap.read,
-        scope: "team",
+        scope: "team" as const,
       },
 
       // =====================================================================
@@ -383,13 +421,13 @@ async function seedRBAC() {
         roleId: employeeRole.id,
         resourceId: resourceMap.users,
         actionId: actionMap.read,
-        scope: "own",
+        scope: "own" as const,
       },
       {
         roleId: employeeRole.id,
         resourceId: resourceMap.users,
         actionId: actionMap.update,
-        scope: "own",
+        scope: "own" as const,
       },
 
       // Teams - Read own team
@@ -397,7 +435,7 @@ async function seedRBAC() {
         roleId: employeeRole.id,
         resourceId: resourceMap.teams,
         actionId: actionMap.read,
-        scope: "own",
+        scope: "own" as const,
       },
 
       // Schedules - Read own schedules
@@ -405,7 +443,7 @@ async function seedRBAC() {
         roleId: employeeRole.id,
         resourceId: resourceMap.schedules,
         actionId: actionMap.read,
-        scope: "own",
+        scope: "own" as const,
       },
 
       // Entries - Create/Read/Update own entries
@@ -413,19 +451,19 @@ async function seedRBAC() {
         roleId: employeeRole.id,
         resourceId: resourceMap.entries,
         actionId: actionMap.create,
-        scope: "own",
+        scope: "own" as const,
       },
       {
         roleId: employeeRole.id,
         resourceId: resourceMap.entries,
         actionId: actionMap.read,
-        scope: "own",
+        scope: "own" as const,
       },
       {
         roleId: employeeRole.id,
         resourceId: resourceMap.entries,
         actionId: actionMap.update,
-        scope: "own",
+        scope: "own" as const,
       },
 
       // Evaluations - Read own evaluations
@@ -433,7 +471,7 @@ async function seedRBAC() {
         roleId: employeeRole.id,
         resourceId: resourceMap.evaluations,
         actionId: actionMap.read,
-        scope: "own",
+        scope: "own" as const,
       },
 
       // Reports - Read own reports
@@ -441,7 +479,7 @@ async function seedRBAC() {
         roleId: employeeRole.id,
         resourceId: resourceMap.reports,
         actionId: actionMap.read,
-        scope: "own",
+        scope: "own" as const,
       },
     ];
 
@@ -454,12 +492,12 @@ async function seedRBAC() {
     console.log("");
     console.log("📊 Summary:");
     console.log("  - 3 roles created");
-    console.log("  - 6 resources created");
-    console.log("  - 6 actions created");
+    console.log("  - 7 resources created (including settings)");
+    console.log("  - 7 actions created");
     console.log(`  - ${permissionsList.length} permissions created`);
     console.log("");
     console.log("🔐 Permission Breakdown:");
-    console.log("  • Admin: Full access to all resources");
+    console.log("  • Admin: Full access to all resources + settings");
     console.log("  • Team Leader: Manage team schedules and evaluations");
     console.log("  • Employee: Manage own entries and view own data");
     console.log("");

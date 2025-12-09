@@ -192,7 +192,7 @@ export function BulkEvaluationForm({
     >
       <Space orientation="vertical" size="middle" style={{ width: "100%" }}>
         <Alert
-          message="Select entries to evaluate in bulk"
+          title="Select entries to evaluate in bulk"
           description="Choose one or more entries, set their scores, and create all evaluations at once. This is useful for evaluating multiple entries with similar quality standards."
           type="info"
           showIcon
@@ -247,7 +247,7 @@ export function BulkEvaluationForm({
 
         {selectedRowKeys.length > 0 && (
           <Alert
-            message={`Ready to create ${selectedRowKeys.length} evaluation${
+            title={`Ready to create ${selectedRowKeys.length} evaluation${
               selectedRowKeys.length === 1 ? "" : "s"
             }`}
             type="success"

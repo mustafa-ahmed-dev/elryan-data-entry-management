@@ -113,7 +113,7 @@ export function SecurityPoliciesForm() {
       {/* Password Policy */}
       <Card title="Password Policy" style={{ marginBottom: 16 }}>
         <Alert
-          message="Password requirements for all users"
+          title="Password requirements for all users"
           description="These settings will apply to new passwords and password changes."
           type="info"
           showIcon
@@ -182,7 +182,7 @@ export function SecurityPoliciesForm() {
       {/* Session Settings */}
       <Card title="Session Settings" style={{ marginBottom: 16 }}>
         <Alert
-          message="Control user session behavior"
+          title="Control user session behavior"
           description="These settings affect how long users stay logged in and session limits."
           type="info"
           showIcon
@@ -219,7 +219,7 @@ export function SecurityPoliciesForm() {
       {/* Login Security */}
       <Card title="Login Security" style={{ marginBottom: 16 }}>
         <Alert
-          message="Protect against brute force attacks"
+          title="Protect against brute force attacks"
           description="Configure how the system handles failed login attempts."
           type="info"
           showIcon

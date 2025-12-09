@@ -167,7 +167,7 @@ export function UserForm({
 
         {!isEditing && (
           <Alert
-            message="Default Password"
+            title="Default Password"
             description="Make sure to use a strong password. Users can change their password after logging in."
             type="info"
             showIcon
