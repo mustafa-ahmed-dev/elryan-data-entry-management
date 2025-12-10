@@ -1,8 +1,12 @@
 "use client";
 
 import { ReactNode } from "react";
+<<<<<<< HEAD
 import { useAuth } from "@/lib/hooks/useAuth";
 import { usePermissions } from "@/lib/hooks/usePermissions";
+=======
+import { useAuth, usePermissions } from "@/lib/hooks";
+>>>>>>> local-backup
 import type { UserRole } from "@/lib/constants/roles";
 import type {
   ActionName,

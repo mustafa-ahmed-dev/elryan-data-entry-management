@@ -35,8 +35,12 @@ import {
   RulesList,
   RuleForm,
 } from "@/components/settings";
+<<<<<<< HEAD
 import { useRuleSets, useRuleSet } from "@/lib/hooks/useRuleSets";
 import { useRules } from "@/lib/hooks/useRules";
+=======
+import { useRuleSets, useRuleSet, useRules } from "@/lib/hooks";
+>>>>>>> local-backup
 
 export default function QualityRulesPage() {
   return (

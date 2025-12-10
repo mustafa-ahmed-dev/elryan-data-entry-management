@@ -17,8 +17,12 @@ import {
   BarChartOutlined,
 } from "@ant-design/icons";
 import { signOut } from "next-auth/react";
+<<<<<<< HEAD
 import { useAuth } from "@/lib/hooks/useAuth";
 import { usePermissions } from "@/lib/hooks/usePermissions";
+=======
+import { useAuth, usePermissions } from "@/lib/hooks";
+>>>>>>> local-backup
 import {
   ProtectedRoute,
   PermissionGate,

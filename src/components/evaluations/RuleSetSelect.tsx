@@ -8,7 +8,11 @@
 
 import { Select, Tag } from "antd";
 import { StarFilled } from "@ant-design/icons";
+<<<<<<< HEAD
 import { useRuleSets } from "@/lib/hooks/useRuleSets";
+=======
+import { useRuleSets } from "@/lib/hooks";
+>>>>>>> local-backup
 
 interface RuleSetSelectProps {
   value?: number;

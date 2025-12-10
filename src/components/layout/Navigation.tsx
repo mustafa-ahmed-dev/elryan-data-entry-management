@@ -17,7 +17,11 @@ import {
   StarOutlined,
   BarChartOutlined,
 } from "@ant-design/icons";
+<<<<<<< HEAD
 import { usePermissions } from "@/lib/hooks/usePermissions";
+=======
+import { usePermissions } from "@/lib/hooks";
+>>>>>>> local-backup
 
 interface NavigationProps {
   mode?: "inline" | "horizontal" | "vertical";
