@@ -19,8 +19,5 @@ export * from "./useRules";
 export * from "./useRuleSets";
 export * from "./useSchedules";
 export * from "./useReports";
-<<<<<<< HEAD
-=======
 export * from "./useEvaluations";
 export * from "./useRuleTypes";
->>>>>>> local-backup

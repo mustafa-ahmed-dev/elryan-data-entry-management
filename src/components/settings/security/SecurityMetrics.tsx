@@ -12,11 +12,7 @@ import {
   ApartmentOutlined,
   ThunderboltOutlined,
 } from "@ant-design/icons";
-<<<<<<< HEAD
-import { usePermissionStatistics } from "@/lib/hooks/usePermissions";
-=======
 import { usePermissionStatistics } from "@/lib/hooks";
->>>>>>> local-backup
 
 export function SecurityMetrics() {
   const { statistics, isLoading } = usePermissionStatistics();
@@ -37,11 +33,7 @@ export function SecurityMetrics() {
             title="Total Permissions"
             value={statistics.totalPermissions}
             prefix={<SafetyOutlined />}
-<<<<<<< HEAD
-            valueStyle={{ color: "#3f8600" }}
-=======
             styles={{ content: { color: "#3f8600" } }}
->>>>>>> local-backup
           />
         </Card>
       </Col>
@@ -52,11 +44,7 @@ export function SecurityMetrics() {
             title="Active Roles"
             value={statistics.totalRoles}
             prefix={<ApartmentOutlined />}
-<<<<<<< HEAD
-            valueStyle={{ color: "#1890ff" }}
-=======
             styles={{ content: { color: "#1890ff" } }}
->>>>>>> local-backup
           />
         </Card>
       </Col>
@@ -67,11 +55,7 @@ export function SecurityMetrics() {
             title="Protected Resources"
             value={statistics.totalResources}
             prefix={<ThunderboltOutlined />}
-<<<<<<< HEAD
-            valueStyle={{ color: "#722ed1" }}
-=======
             styles={{ content: { color: "#722ed1" } }}
->>>>>>> local-backup
           />
         </Card>
       </Col>
@@ -82,11 +66,7 @@ export function SecurityMetrics() {
             title="Permission Actions"
             value={statistics.totalActions}
             prefix={<UserOutlined />}
-<<<<<<< HEAD
-            valueStyle={{ color: "#fa8c16" }}
-=======
             styles={{ content: { color: "#fa8c16" } }}
->>>>>>> local-backup
           />
         </Card>
       </Col>

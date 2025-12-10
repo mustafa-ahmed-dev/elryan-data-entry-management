@@ -22,11 +22,7 @@ import {
   TeamFilters,
   TeamMembers,
 } from "@/components/settings/teams";
-<<<<<<< HEAD
-import { useTeams } from "@/lib/hooks/useTeams";
-=======
 import { useTeams } from "@/lib/hooks";
->>>>>>> local-backup
 
 export default function TeamsSettingsPage() {
   return (

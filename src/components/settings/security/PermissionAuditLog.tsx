@@ -22,10 +22,7 @@ import {
   SearchOutlined,
 } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
-import {
-  usePermissionAudit,
-  useExportAuditLog,
-} from "@/lib/hooks/usePermissionAudit";
+import { usePermissionAudit, useExportAuditLog } from "@/lib/hooks";
 import type { PermissionAuditLog } from "@/lib/types/auth";
 import dayjs from "dayjs";
 

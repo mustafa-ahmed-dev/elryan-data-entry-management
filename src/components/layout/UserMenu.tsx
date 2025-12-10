@@ -14,11 +14,7 @@ import {
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
 import { signOut } from "next-auth/react";
-<<<<<<< HEAD
-import { useAuth } from "@/lib/hooks/useAuth";
-=======
 import { useAuth } from "@/lib/hooks";
->>>>>>> local-backup
 import { ROLE_LABELS } from "@/lib/constants/roles";
 import { useRouter } from "next/navigation";
 

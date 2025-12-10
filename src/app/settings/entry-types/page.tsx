@@ -16,11 +16,7 @@ import {
 import { ProtectedRoute } from "@/components/auth";
 import { MainLayout } from "@/components/layout";
 import { EntryTypeTable, EntryTypeForm } from "@/components/settings";
-<<<<<<< HEAD
-import { useEntryTypes } from "@/lib/hooks/useEntryTypes";
-=======
 import { useEntryTypes } from "@/lib/hooks";
->>>>>>> local-backup
 
 export default function EntryTypesPage() {
   return (

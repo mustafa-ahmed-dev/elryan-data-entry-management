@@ -18,11 +18,7 @@ import {
 import { ProtectedRoute } from "@/components/auth";
 import { MainLayout } from "@/components/layout";
 import { UserTable, UserForm, UserFilters } from "@/components/settings/users";
-<<<<<<< HEAD
-import { useUsers } from "@/lib/hooks/useUsers";
-=======
 import { useUsers } from "@/lib/hooks";
->>>>>>> local-backup
 
 export default function UsersSettingsPage() {
   return (

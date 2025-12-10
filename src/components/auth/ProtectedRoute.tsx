@@ -11,12 +11,7 @@
 import { useEffect, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Spin, Result, Button } from "antd";
-<<<<<<< HEAD
-import { useAuth } from "@/lib/hooks/useAuth";
-import { usePermissions } from "@/lib/hooks/usePermissions";
-=======
 import { useAuth, usePermissions } from "@/lib/hooks";
->>>>>>> local-backup
 import type { UserRole } from "@/lib/constants/roles";
 import type {
   ActionName,

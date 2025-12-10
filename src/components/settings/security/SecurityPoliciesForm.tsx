@@ -17,10 +17,7 @@ import {
   Alert,
 } from "antd";
 import { SaveOutlined, ReloadOutlined } from "@ant-design/icons";
-import {
-  useSecuritySettings,
-  useUpdateSecuritySettings,
-} from "@/lib/hooks/useSecuritySettings";
+import { useSecuritySettings, useUpdateSecuritySettings } from "@/lib/hooks";
 
 export function SecurityPoliciesForm() {
   const { settings, isLoading, refresh } = useSecuritySettings();

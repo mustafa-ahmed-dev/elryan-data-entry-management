@@ -28,10 +28,7 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
 } from "@ant-design/icons";
-import {
-  usePermissionMatrix,
-  useUpdatePermissions,
-} from "@/lib/hooks/usePermissions";
+import { usePermissionMatrix, useUpdatePermissions } from "@/lib/hooks";
 import type { PermissionScope } from "@/lib/types/auth";
 
 const { Title, Text } = Typography;

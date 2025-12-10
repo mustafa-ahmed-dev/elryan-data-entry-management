@@ -26,7 +26,6 @@ import dayjs, { Dayjs } from "dayjs";
 
 const { Text, Title } = Typography;
 const { RangePicker } = DatePicker;
-const { Panel } = Collapse;
 
 interface Entry {
   id: number;
@@ -197,11 +196,13 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       <Card
         style={{ flex: 1, display: "flex", flexDirection: "column" }}
-        bodyStyle={{
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          padding: 0,
+        styles={{
+          body: {
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            padding: 0,
+          },
         }}
       >
         <div style={{ padding: "16px", borderBottom: "1px solid #f0f0f0" }}>
@@ -240,57 +241,59 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
               ghost
               activeKey={filtersCollapsed ? [] : ["filters"]}
               onChange={() => setFiltersCollapsed(!filtersCollapsed)}
-            >
-              <Panel
-                header={
-                  <Space>
-                    <FilterOutlined />
-                    <Text>Filters</Text>
-                    {(selectedType || dateRange) && (
-                      <Tag color="blue">
-                        {[selectedType, dateRange].filter(Boolean).length}{" "}
-                        active
-                      </Tag>
-                    )}
-                  </Space>
-                }
-                key="filters"
-              >
-                <Space
-                  orientation="vertical"
-                  style={{ width: "100%" }}
-                  size="middle"
-                >
-                  <Select
-                    placeholder="Filter by entry type"
-                    style={{ width: "100%" }}
-                    value={selectedType}
-                    onChange={setSelectedType}
-                    allowClear
-                  >
-                    {entryTypes.map((type) => (
-                      <Select.Option key={type.id} value={type.id}>
-                        {type.name}
-                      </Select.Option>
-                    ))}
-                  </Select>
+              items={[
+                {
+                  key: "filters",
+                  label: (
+                    <Space>
+                      <FilterOutlined />
+                      <Text>Filters</Text>
+                      {(selectedType || dateRange) && (
+                        <Tag color="blue">
+                          {[selectedType, dateRange].filter(Boolean).length}{" "}
+                          active
+                        </Tag>
+                      )}
+                    </Space>
+                  ),
+                  children: (
+                    <Space
+                      orientation="vertical"
+                      style={{ width: "100%" }}
+                      size="middle"
+                    >
+                      <Select
+                        placeholder="Filter by entry type"
+                        style={{ width: "100%" }}
+                        value={selectedType}
+                        onChange={setSelectedType}
+                        allowClear
+                      >
+                        {entryTypes.map((type) => (
+                          <Select.Option key={type.id} value={type.id}>
+                            {type.name}
+                          </Select.Option>
+                        ))}
+                      </Select>
 
-                  <RangePicker
-                    style={{ width: "100%" }}
-                    value={dateRange}
-                    onChange={(dates) =>
-                      setDateRange(dates as [Dayjs, Dayjs] | null)
-                    }
-                  />
+                      <RangePicker
+                        style={{ width: "100%" }}
+                        value={dateRange}
+                        onChange={(dates) =>
+                          setDateRange(dates as [Dayjs, Dayjs] | null)
+                        }
+                      />
 
-                  {(selectedType || dateRange || searchText) && (
-                    <Button onClick={clearFilters} size="small" block>
-                      Clear All Filters
-                    </Button>
-                  )}
-                </Space>
-              </Panel>
-            </Collapse>
+                      {(selectedType || dateRange || searchText) && (
+                        <Button onClick={clearFilters} size="small" block>
+                          Clear All Filters
+                        </Button>
+                      )}
+                    </Space>
+                  ),
+                },
+              ]}
+            />
           </Space>
         </div>
 

@@ -8,11 +8,7 @@
 
 import { useEffect } from "react";
 import { Modal, Form, Input, InputNumber, Alert } from "antd";
-<<<<<<< HEAD
-import type { RuleType } from "@/lib/hooks/useRuleTypes";
-=======
 import type { RuleType } from "@/lib/hooks";
->>>>>>> local-backup
 
 interface RuleTypeFormProps {
   open: boolean;

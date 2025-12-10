@@ -8,12 +8,7 @@
 
 import { useEffect } from "react";
 import { Modal, Form, Input, Select, Switch, Alert } from "antd";
-<<<<<<< HEAD
-import { useRuleSets } from "@/lib/hooks/useRuleSets";
-import { useTeams } from "@/lib/hooks/useTeams";
-=======
 import { useTeams } from "@/lib/hooks";
->>>>>>> local-backup
 import useSWR from "swr";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());

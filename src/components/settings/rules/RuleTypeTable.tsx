@@ -13,11 +13,7 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
 } from "@ant-design/icons";
-<<<<<<< HEAD
-import type { RuleType } from "@/lib/hooks/useRuleTypes";
-=======
 import type { RuleType } from "@/lib/hooks";
->>>>>>> local-backup
 
 interface RuleTypeTableProps {
   ruleTypes: RuleType[];

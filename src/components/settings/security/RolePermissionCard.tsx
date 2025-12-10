@@ -69,11 +69,7 @@ export function RolePermissionCard({ role, onEdit }: RolePermissionCardProps) {
               title="Permissions"
               value={role.permissionCount || 0}
               prefix={<SafetyOutlined />}
-<<<<<<< HEAD
-              valueStyle={{ color: "#3f8600" }}
-=======
               styles={{ content: { color: "#3f8600" } }}
->>>>>>> local-backup
             />
           </Col>
           <Col span={12}>
@@ -81,11 +77,7 @@ export function RolePermissionCard({ role, onEdit }: RolePermissionCardProps) {
               title="Users"
               value={role.userCount || 0}
               prefix={<UserOutlined />}
-<<<<<<< HEAD
-              valueStyle={{ color: "#1890ff" }}
-=======
               styles={{ content: { color: "#1890ff" } }}
->>>>>>> local-backup
             />
           </Col>
         </Row>

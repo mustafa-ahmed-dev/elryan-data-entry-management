@@ -13,11 +13,7 @@ import { ProtectedRoute } from "@/components/auth";
 import { MainLayout } from "@/components/layout";
 import { RuleTypeTable } from "@/components/settings/rules/RuleTypeTable";
 import { RuleTypeForm } from "@/components/settings/rules/RuleTypeForm";
-<<<<<<< HEAD
-import { useRuleTypes, type RuleType } from "@/lib/hooks/useRuleTypes";
-=======
 import { useRuleTypes, type RuleType } from "@/lib/hooks";
->>>>>>> local-backup
 
 export default function RuleTypesPage() {
   return (
