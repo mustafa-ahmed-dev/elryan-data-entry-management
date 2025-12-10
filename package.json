@@ -1,0 +1,59 @@
+{
+  "name": "data-entry-management",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:seed": "tsx src/db/seed.ts",
+    "db:seed:rbac": "tsx src/db/seed-rbac.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "data-entry",
+    "quality-control",
+    "management"
+  ],
+  "dependencies": {
+    "@ant-design/icons": "^6.1.0",
+    "@ant-design/nextjs-registry": "^1.3.0",
+    "@hookform/resolvers": "^5.2.2",
+    "@tanstack/react-query": "^5.90.11",
+    "antd": "^6.0.1",
+    "argon2": "^0.44.0",
+    "axios": "^1.13.2",
+    "date-fns": "^4.1.0",
+    "dayjs": "^1.11.19",
+    "drizzle-orm": "^0.44.7",
+    "exceljs": "^4.4.0",
+    "lucide-react": "^0.555.0",
+    "next": "16.0.4",
+    "next-auth": "^4.24.13",
+    "pg": "^8.16.3",
+    "postgres": "^3.4.7",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "react-hook-form": "^7.67.0",
+    "recharts": "^3.5.1",
+    "swr": "^2.3.7",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.25",
+    "@types/pg": "^8.15.6",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "dotenv": "^17.2.3",
+    "drizzle-kit": "^0.31.7",
+    "eslint": "^9",
+    "eslint-config-next": "16.0.4",
+    "tsx": "^4.20.6",
+    "typescript": "^5"
+  }
+}
