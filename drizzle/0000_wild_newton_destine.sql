@@ -32,7 +32,6 @@ CREATE TABLE "evaluation_rule_sets" (
 	"name" varchar(200) NOT NULL,
 	"description" text,
 	"is_active" boolean DEFAULT false NOT NULL,
-	"version" integer NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
@@ -40,7 +39,7 @@ CREATE TABLE "evaluation_rules" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"rule_set_id" integer NOT NULL,
 	"rule_name" varchar(200) NOT NULL,
-	"rule_type" varchar(50) NOT NULL,
+	"rule_type_id" integer NOT NULL,
 	"deduction_points" integer NOT NULL,
 	"description" text,
 	"created_at" timestamp DEFAULT now() NOT NULL
@@ -101,6 +100,19 @@ CREATE TABLE "roles" (
 	CONSTRAINT "roles_name_unique" UNIQUE("name")
 );
 --> statement-breakpoint
+CREATE TABLE "rule_types" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"name" varchar(100) NOT NULL,
+	"display_name" varchar(100) NOT NULL,
+	"icon" varchar(10),
+	"description" text,
+	"is_active" boolean DEFAULT true NOT NULL,
+	"sort_order" integer DEFAULT 0 NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "rule_types_name_unique" UNIQUE("name")
+);
+--> statement-breakpoint
 CREATE TABLE "schedule_history" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"schedule_id" integer NOT NULL,
@@ -151,6 +163,7 @@ CREATE TABLE "weekly_schedules" (
 ALTER TABLE "entries" ADD CONSTRAINT "entries_employee_id_users_id_fk" FOREIGN KEY ("employee_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "entries" ADD CONSTRAINT "entries_entry_type_id_entry_types_id_fk" FOREIGN KEY ("entry_type_id") REFERENCES "public"."entry_types"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "evaluation_rules" ADD CONSTRAINT "evaluation_rules_rule_set_id_evaluation_rule_sets_id_fk" FOREIGN KEY ("rule_set_id") REFERENCES "public"."evaluation_rule_sets"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "evaluation_rules" ADD CONSTRAINT "evaluation_rules_rule_type_id_rule_types_id_fk" FOREIGN KEY ("rule_type_id") REFERENCES "public"."rule_types"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "permission_audit_log" ADD CONSTRAINT "permission_audit_log_permission_id_permissions_id_fk" FOREIGN KEY ("permission_id") REFERENCES "public"."permissions"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "permission_audit_log" ADD CONSTRAINT "permission_audit_log_changed_by_users_id_fk" FOREIGN KEY ("changed_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "permissions" ADD CONSTRAINT "permissions_role_id_roles_id_fk" FOREIGN KEY ("role_id") REFERENCES "public"."roles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint

@@ -97,7 +97,7 @@ export function RuleSetForm({
         {!isEditing && (
           <Alert
             title="New Rule Set"
-            description="The new rule set will be created as inactive with an auto-generated version number. After adding rules to it, you can activate it from the rule sets list."
+            description="The new rule set will be created as inactive. After adding rules to it, you can activate it from the rule sets list."
             type="info"
             showIcon
             style={{ marginTop: "16px" }}

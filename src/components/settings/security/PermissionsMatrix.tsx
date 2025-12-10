@@ -318,7 +318,7 @@ export function PermissionsMatrix() {
                 }}
               >
                 <Space
-                  direction="vertical"
+                  orientation="vertical"
                   style={{ width: "100%" }}
                   size="middle"
                 >
@@ -425,7 +425,7 @@ export function PermissionsMatrix() {
             background: "#fafafa",
           }}
         >
-          <Space direction="vertical" size="large">
+          <Space orientation="vertical" size="large">
             <div style={{ fontSize: 48 }}>🔐</div>
             <div>
               <Title level={4}>Select a Role to Manage Permissions</Title>

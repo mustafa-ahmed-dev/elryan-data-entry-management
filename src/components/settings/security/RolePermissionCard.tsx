@@ -46,7 +46,7 @@ export function RolePermissionCard({ role, onEdit }: RolePermissionCardProps) {
           : undefined
       }
     >
-      <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+      <Space orientation="vertical" size="middle" style={{ width: "100%" }}>
         {/* Role Header */}
         <div>
           <Space>

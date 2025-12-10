@@ -23,7 +23,6 @@ interface RuleSet {
   name: string;
   description: string | null;
   isActive: boolean;
-  version: number;
   createdAt: Date;
 }
 
@@ -68,14 +67,6 @@ export function RuleSetTable({
           )}
         </div>
       ),
-    },
-    {
-      title: "Version",
-      dataIndex: "version",
-      key: "version",
-      width: 100,
-      align: "center",
-      render: (version) => <Tag color="blue">V{version}</Tag>,
     },
     {
       title: "Status",

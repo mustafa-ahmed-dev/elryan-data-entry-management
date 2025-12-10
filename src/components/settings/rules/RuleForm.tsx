@@ -7,7 +7,8 @@
 "use client";
 
 import { useEffect } from "react";
-import { Modal, Form, Input, InputNumber, Select, Alert } from "antd";
+import { Modal, Form, Input, InputNumber, Select, Alert, Spin } from "antd";
+import { useRuleTypes } from "@/lib/hooks/useRuleTypes";
 
 interface RuleFormProps {
   open: boolean;
@@ -28,6 +29,7 @@ export function RuleForm({
 }: RuleFormProps) {
   const [form] = Form.useForm();
   const isEditing = !!rule;
+  const { ruleTypes, isLoading: ruleTypesLoading } = useRuleTypes();
 
   // Reset form when modal opens/closes or rule changes
   useEffect(() => {
@@ -35,7 +37,7 @@ export function RuleForm({
       if (rule) {
         form.setFieldsValue({
           ruleName: rule.ruleName,
-          ruleType: rule.ruleType,
+          ruleTypeId: rule.ruleTypeId,
           deductionPoints: rule.deductionPoints,
           description: rule.description,
         });
@@ -88,28 +90,29 @@ export function RuleForm({
         </Form.Item>
 
         <Form.Item
-          name="ruleType"
+          name="ruleTypeId"
           label="Rule Type"
           rules={[{ required: true, message: "Please select a rule type" }]}
           extra="Choose the category that best describes this quality check"
         >
-          <Select placeholder="Select rule type">
-            <Select.Option value="naming">
-              <span>🏷️ Naming</span> - Product naming conventions
-            </Select.Option>
-            <Select.Option value="specification">
-              <span>📋 Specification</span> - Product specifications
-            </Select.Option>
-            <Select.Option value="keyword">
-              <span>🚫 Keyword</span> - Forbidden or unwanted keywords
-            </Select.Option>
-            <Select.Option value="completeness">
-              <span>✅ Completeness</span> - Required information
-            </Select.Option>
-            <Select.Option value="accuracy">
-              <span>🎯 Accuracy</span> - Data accuracy and correctness
-            </Select.Option>
-          </Select>
+          {ruleTypesLoading ? (
+            <Spin />
+          ) : (
+            <Select placeholder="Select rule type">
+              {ruleTypes.map((ruleType) => (
+                <Select.Option key={ruleType.id} value={ruleType.id}>
+                  {ruleType.icon && <span>{ruleType.icon} </span>}
+                  <span>{ruleType.displayName}</span>
+                  {ruleType.description && (
+                    <span style={{ color: "#999", fontSize: "12px" }}>
+                      {" "}
+                      - {ruleType.description}
+                    </span>
+                  )}
+                </Select.Option>
+              ))}
+            </Select>
+          )}
         </Form.Item>
 
         <Form.Item

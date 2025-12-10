@@ -1,1 +1,0 @@
-ALTER TABLE "evaluation_rule_sets" DROP COLUMN "version";

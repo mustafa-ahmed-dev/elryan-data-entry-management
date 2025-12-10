@@ -24,8 +24,7 @@ export function RuleSetSelect({ value, onChange }: RuleSetSelectProps) {
       onChange={onChange}
       placeholder="Select evaluation rule set"
       loading={isLoading}
-      showSearch
-      optionFilterProp="children"
+      showSearch={{ optionFilterProp: "children" }}
     >
       {ruleSets.map((ruleSet: any) => (
         <Select.Option key={ruleSet.id} value={ruleSet.id}>
@@ -48,7 +47,6 @@ export function RuleSetSelect({ value, onChange }: RuleSetSelectProps) {
                 </Tag>
               )}
             </span>
-            <Tag color="blue">V{ruleSet.version}</Tag>
           </div>
         </Select.Option>
       ))}

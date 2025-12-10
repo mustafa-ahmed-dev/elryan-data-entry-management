@@ -107,7 +107,6 @@ export const PATCH = withErrorHandling(
 
     const body = await request.json();
 
-    // REMOVED: Version validation - version cannot be updated
     // Validate at least one field
     if (!body.name && !body.description) {
       return ApiErrors.invalidInput(
@@ -135,7 +134,6 @@ export const PATCH = withErrorHandling(
       }
     }
 
-    // Update rule set (version cannot be changed)
     const updateData: any = {};
     if (body.name) updateData.name = body.name;
     if (body.description !== undefined)

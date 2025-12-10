@@ -225,6 +225,18 @@ export const evaluationRuleSets = pgTable("evaluation_rule_sets", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const ruleTypes = pgTable("rule_types", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 100 }).notNull().unique(),
+  displayName: varchar("display_name", { length: 100 }).notNull(),
+  icon: varchar("icon", { length: 10 }), // Emoji or icon identifier
+  description: text("description"),
+  isActive: boolean("is_active").default(true).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 /**
  * Evaluation Rules - Individual quality check rules
  *
@@ -237,8 +249,10 @@ export const evaluationRules = pgTable("evaluation_rules", {
     .notNull(),
   ruleName: varchar("rule_name", { length: 200 }).notNull(),
 
-  // Types: 'naming', 'specification', 'keyword', 'completeness', 'accuracy'
-  ruleType: varchar("rule_type", { length: 50 }).notNull(),
+  // Reference to rule_types table instead of varchar
+  ruleTypeId: integer("rule_type_id")
+    .references(() => ruleTypes.id)
+    .notNull(),
 
   // How many points are deducted if this rule is violated
   deductionPoints: integer("deduction_points").notNull(),

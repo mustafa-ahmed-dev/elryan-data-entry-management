@@ -361,9 +361,6 @@ function QualityRulesContent() {
               <Row gutter={16}>
                 <Col span={12}>
                   <p>
-                    <strong>Version:</strong> V{viewingRuleSet.version}
-                  </p>
-                  <p>
                     <strong>Status:</strong>{" "}
                     {viewingRuleSet.isActive ? (
                       <span style={{ color: "#52c41a" }}>Active</span>

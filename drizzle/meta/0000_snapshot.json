@@ -1,5 +1,5 @@
 {
-  "id": "b4de5ba2-0b4a-4876-a250-d9d78366bac3",
+  "id": "df7a3e32-d47e-4a8e-a1c8-ce85a7f15e45",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -229,12 +229,6 @@
           "notNull": true,
           "default": false
         },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -273,9 +267,9 @@
           "primaryKey": false,
           "notNull": true
         },
-        "rule_type": {
-          "name": "rule_type",
-          "type": "varchar(50)",
+        "rule_type_id": {
+          "name": "rule_type_id",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true
         },
@@ -307,6 +301,19 @@
           "tableTo": "evaluation_rule_sets",
           "columnsFrom": [
             "rule_set_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "evaluation_rules_rule_type_id_rule_types_id_fk": {
+          "name": "evaluation_rules_rule_type_id_rule_types_id_fk",
+          "tableFrom": "evaluation_rules",
+          "tableTo": "rule_types",
+          "columnsFrom": [
+            "rule_type_id"
           ],
           "columnsTo": [
             "id"
@@ -741,6 +748,85 @@
       "uniqueConstraints": {
         "roles_name_unique": {
           "name": "roles_name_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "name"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.rule_types": {
+      "name": "rule_types",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "icon": {
+          "name": "icon",
+          "type": "varchar(10)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "rule_types_name_unique": {
+          "name": "rule_types_name_unique",
           "nullsNotDistinct": false,
           "columns": [
             "name"

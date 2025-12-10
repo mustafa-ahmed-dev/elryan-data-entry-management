@@ -13,7 +13,7 @@ import {
   TeamOutlined,
   SettingOutlined,
   SafetyOutlined,
-  BellOutlined,
+  TagsOutlined,
 } from "@ant-design/icons";
 import { ProtectedRoute } from "@/components/auth";
 import { MainLayout } from "@/components/layout";
@@ -71,12 +71,12 @@ function SettingsContent() {
       available: true,
     },
     {
-      title: "Notifications",
-      description: "Configure email and system notifications",
-      icon: <BellOutlined style={{ fontSize: "48px", color: "#13c2c2" }} />,
-      path: "/settings/notifications",
-      available: false,
-      comingSoon: true,
+      title: "Rule Types",
+      description: "Manage quality rule type categories",
+      icon: <TagsOutlined style={{ fontSize: "48px", color: "#722ed1" }} />,
+      path: "/settings/rule-types",
+      available: true,
+      comingSoon: false,
     },
   ];
 
