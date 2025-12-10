@@ -27,7 +27,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
 
   const session = await getServerSession(authOptions);
   if (!session?.user) {
-    return ApiErrors.unauthorized(context); // ✅ Pass context
+    return ApiErrors.unauthorized(context);
   }
 
   // Add user info to context
@@ -36,12 +36,12 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
 
   const canRead = await checkPermission(session.user.id, "entries", "read");
   if (!canRead) {
-    return ApiErrors.insufficientPermissions(context, "entries:read"); // ✅ Context first, then permission
+    return ApiErrors.insufficientPermissions(context, "entries:read");
   }
 
   const userPerms = await getUserPermissions(session.user.id);
   if (!userPerms) {
-    return ApiErrors.forbidden(context); // ✅ Pass context
+    return ApiErrors.forbidden(context);
   }
 
   // Get query parameters
@@ -58,14 +58,14 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
 
   // Validate pagination
   if (page < 1) {
-    return ApiErrors.invalidInput(context, "Page must be >= 1", "page"); // ✅
+    return ApiErrors.invalidInput(context, "Page must be >= 1", "page");
   }
   if (pageSize < 1 || pageSize > 100) {
     return ApiErrors.invalidInput(
       context,
       "Page size must be between 1 and 100",
       "pageSize"
-    ); // ✅
+    );
   }
 
   // Validate date range if both provided
@@ -89,7 +89,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
         context,
         "Invalid employee ID",
         "employeeId"
-      ); // ✅
+      );
     }
     filters.employeeId = empId;
   }
@@ -97,7 +97,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
   if (teamId) {
     const tId = parseInt(teamId);
     if (isNaN(tId)) {
-      return ApiErrors.invalidInput(context, "Invalid team ID", "teamId"); // ✅
+      return ApiErrors.invalidInput(context, "Invalid team ID", "teamId");
     }
     filters.teamId = tId;
   }
@@ -109,7 +109,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
         context,
         "Invalid entry type ID",
         "entryTypeId"
-      ); // ✅
+      );
     }
     filters.entryTypeId = typeId;
   }
@@ -131,7 +131,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
 
   const response: any = {
     success: true,
-    data: result.entries,
+    data: result.data,
     pagination: {
       page: result.pagination.page,
       pageSize: result.pagination.pageSize,
@@ -147,7 +147,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
 
   return NextResponse.json(response, {
     headers: {
-      "X-Request-ID": context.requestId || "", // ✅ Add request ID
+      "X-Request-ID": context.requestId || "",
     },
   });
 });
@@ -159,7 +159,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
 
   const session = await getServerSession(authOptions);
   if (!session?.user) {
-    return ApiErrors.unauthorized(context); // ✅
+    return ApiErrors.unauthorized(context);
   }
 
   context.userId = session.user.id;
@@ -167,7 +167,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
 
   const canCreate = await checkPermission(session.user.id, "entries", "create");
   if (!canCreate) {
-    return ApiErrors.insufficientPermissions(context, "entries:create"); // ✅
+    return ApiErrors.insufficientPermissions(context, "entries:create");
   }
 
   const body = await request.json();
@@ -178,16 +178,16 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     for (let i = 0; i < body.length; i++) {
       const entry = body[i];
       if (!entry.employeeId) {
-        return ApiErrors.missingField(context, `entries[${i}].employeeId`); // ✅
+        return ApiErrors.missingField(context, `entries[${i}].employeeId`);
       }
       if (!entry.entryTypeId) {
-        return ApiErrors.missingField(context, `entries[${i}].entryTypeId`); // ✅
+        return ApiErrors.missingField(context, `entries[${i}].entryTypeId`);
       }
       if (!entry.entryName) {
-        return ApiErrors.missingField(context, `entries[${i}].entryName`); // ✅
+        return ApiErrors.missingField(context, `entries[${i}].entryName`);
       }
       if (!entry.timestamp) {
-        return ApiErrors.missingField(context, `entries[${i}].timestamp`); // ✅
+        return ApiErrors.missingField(context, `entries[${i}].timestamp`);
       }
     }
 
@@ -202,7 +202,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
       {
         status: 201,
         headers: {
-          "X-Request-ID": context.requestId || "", // ✅
+          "X-Request-ID": context.requestId || "",
         },
       }
     );
@@ -271,7 +271,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     {
       status: 201,
       headers: {
-        "X-Request-ID": context.requestId || "", // ✅
+        "X-Request-ID": context.requestId || "",
       },
     }
   );

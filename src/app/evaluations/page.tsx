@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Card, Row, Col, Statistic, Tabs, Button, Space, Drawer } from "antd";
 import {
   CheckCircleOutlined,
