@@ -1,16 +1,18 @@
 /**
  * Header Component
  *
- * Top header with menu toggle and user menu
+ * Top header with menu toggle, dark mode toggle, and user menu
  */
 
 "use client";
 
-import { Layout, Button, Space } from "antd";
+import { Layout, Button, Space, theme } from "antd";
 import { MenuFoldOutlined, MenuUnfoldOutlined } from "@ant-design/icons";
 import { UserMenu } from "./UserMenu";
+import { DarkModeToggle } from "./DarkModeToggle";
 
 const { Header: AntHeader } = Layout;
+const { useToken } = theme;
 
 interface HeaderProps {
   collapsed: boolean;
@@ -18,11 +20,13 @@ interface HeaderProps {
 }
 
 export function Header({ collapsed, onToggle }: HeaderProps) {
+  const { token } = useToken();
+
   return (
     <AntHeader
       style={{
         padding: "0 24px",
-        background: "#fff",
+        background: token.colorBgContainer,
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
@@ -44,8 +48,9 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
         }}
       />
 
-      {/* Right side - User menu */}
+      {/* Right side - Dark mode toggle and User menu */}
       <Space>
+        <DarkModeToggle />
         <UserMenu />
       </Space>
     </AntHeader>

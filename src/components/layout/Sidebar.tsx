@@ -2,12 +2,14 @@
  * Sidebar Component
  *
  * Navigation sidebar with role-based menu items
+ * Theme-aware for dark mode support
  */
 
 "use client";
 
 import { Layout } from "antd";
 import { Navigation } from "./Navigation";
+import { useEffect, useState } from "react";
 
 const { Sider } = Layout;
 
@@ -17,6 +19,24 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed, onCollapse }: SidebarProps) {
+  const [isDark, setIsDark] = useState(false);
+
+  // Check theme from localStorage
+  useEffect(() => {
+    const checkTheme = () => {
+      const savedTheme = localStorage.getItem("theme");
+      setIsDark(savedTheme === "dark");
+    };
+
+    checkTheme();
+
+    // Listen for theme changes
+    const interval = setInterval(checkTheme, 100);
+    return () => clearInterval(interval);
+  }, []);
+
+  const siderTheme = isDark ? "dark" : "light";
+
   return (
     <Sider
       collapsible
@@ -29,7 +49,7 @@ export function Sidebar({ collapsed, onCollapse }: SidebarProps) {
         top: 0,
         left: 0,
       }}
-      theme="dark"
+      theme={siderTheme}
     >
       {/* Logo */}
       <div
@@ -38,7 +58,7 @@ export function Sidebar({ collapsed, onCollapse }: SidebarProps) {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          color: "#fff",
+          color: isDark ? "#fff" : "#000",
           fontSize: collapsed ? "20px" : "18px",
           fontWeight: "bold",
           padding: "0 16px",
@@ -50,7 +70,7 @@ export function Sidebar({ collapsed, onCollapse }: SidebarProps) {
       </div>
 
       {/* Navigation Menu */}
-      <Navigation mode="inline" theme="dark" />
+      <Navigation mode="inline" theme={siderTheme} />
     </Sider>
   );
 }
