@@ -85,10 +85,15 @@ export function EvaluationTable({
       render: (id) => <span style={{ fontWeight: 500 }}>#{id}</span>,
     },
     {
-      title: "Employee",
+      title: "Entry Employee",
       dataIndex: "employeeName",
       key: "employeeName",
       ellipsis: true,
+      render: (name) => (
+        <Tooltip title="Employee whose entry was evaluated">
+          <span>{name}</span>
+        </Tooltip>
+      ),
     },
     {
       title: "Score",

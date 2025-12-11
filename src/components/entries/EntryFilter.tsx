@@ -95,16 +95,31 @@ export function EntryFilter({
     fetchEntryTypes();
   }, []);
 
-  // Fetch employees when role allows
+  // Fetch employees when role allows (now all roles can see employees)
   useEffect(() => {
-    if (!isTeamLeaderOrAdmin) return;
-
     const fetchEmployees = async () => {
       try {
-        const response = await fetch("/api/employees");
+        const response = await fetch("/api/users");
         if (response.ok) {
           const data = await response.json();
-          setEmployees(data);
+          // Handle different response formats
+          let usersList = [];
+          if (Array.isArray(data)) {
+            usersList = data;
+          } else if (data && Array.isArray(data.data)) {
+            usersList = data.data;
+          } else if (data && Array.isArray(data.users)) {
+            usersList = data.users;
+          }
+
+          // Map to employee format with proper name field
+          const mappedEmployees = usersList.map((u: any) => ({
+            id: u.id,
+            name: u.name || u.fullName,
+            email: u.email,
+          }));
+
+          setEmployees(mappedEmployees);
         }
       } catch (error) {
         console.error("Failed to fetch employees:", error);
@@ -112,7 +127,7 @@ export function EntryFilter({
     };
 
     fetchEmployees();
-  }, [isTeamLeaderOrAdmin]);
+  }, []);
 
   // Fetch teams when role allows
   useEffect(() => {
@@ -220,6 +235,27 @@ export function EntryFilter({
                   </Col>
 
                   {isTeamLeaderOrAdmin && (
+                    <Col xs={24} sm={12} lg={8}>
+                      <div style={{ marginBottom: 8 }}>
+                        <strong>Employee</strong>
+                      </div>
+                      <Select
+                        value={employeeId}
+                        onChange={setEmployeeId}
+                        placeholder="All Employees"
+                        style={{ width: "100%" }}
+                        allowClear
+                        showSearch
+                        optionFilterProp="label"
+                        options={employees.map((emp) => ({
+                          label: `${emp.name} (${emp.email})`,
+                          value: emp.id,
+                        }))}
+                      />
+                    </Col>
+                  )}
+
+                  {!isTeamLeaderOrAdmin && (
                     <Col xs={24} sm={12} lg={8}>
                       <div style={{ marginBottom: 8 }}>
                         <strong>Employee</strong>

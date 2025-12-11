@@ -60,12 +60,17 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [selectedType, setSelectedType] = useState<number | null>(null);
+  const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null);
   const [filtersCollapsed, setFiltersCollapsed] = useState(false);
+  const [employees, setEmployees] = useState<
+    Array<{ id: number; name: string; email: string }>
+  >([]);
 
   // Fetch entry types
   useEffect(() => {
     fetchEntryTypes();
+    fetchEmployees();
   }, []);
 
   // Fetch entries on mount and every 30 seconds
@@ -79,7 +84,7 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
   useEffect(() => {
     applyFilters();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entries, searchText, selectedType, dateRange]);
+  }, [entries, searchText, selectedType, selectedEmployee, dateRange]);
 
   const fetchEntries = async () => {
     setLoading(true);
@@ -131,6 +136,35 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
     }
   };
 
+  const fetchEmployees = async () => {
+    try {
+      const response = await fetch("/api/users");
+      if (!response.ok) throw new Error("Failed to fetch employees");
+      const data = await response.json();
+
+      // Handle different API response formats
+      let usersList = [];
+      if (Array.isArray(data)) {
+        usersList = data;
+      } else if (data && Array.isArray(data.data)) {
+        usersList = data.data;
+      } else if (data && Array.isArray(data.users)) {
+        usersList = data.users;
+      }
+
+      setEmployees(
+        usersList.map((u: any) => ({
+          id: u.id,
+          name: u.name || u.fullName,
+          email: u.email,
+        }))
+      );
+    } catch (error) {
+      console.error("Failed to load employees:", error);
+      setEmployees([]);
+    }
+  };
+
   const applyFilters = () => {
     if (!Array.isArray(entries)) {
       setFilteredEntries([]);
@@ -160,6 +194,13 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
       );
     }
 
+    // Employee filter
+    if (selectedEmployee) {
+      filtered = filtered.filter(
+        (entry) => entry.employeeName === selectedEmployee
+      );
+    }
+
     // Date range filter
     if (dateRange) {
       filtered = filtered.filter((entry) => {
@@ -181,6 +222,7 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
   const clearFilters = () => {
     setSearchText("");
     setSelectedType(null);
+    setSelectedEmployee(null);
     setDateRange(null);
   };
 
@@ -205,7 +247,7 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
           </Button>
         }
         style={{ height: "100%" }}
-        styles={{ body: { padding: 0, height: "calc(100% - 57px)" } }}
+        bodyStyle={{ padding: 0, height: "calc(100% - 57px)" }}
       >
         {/* Filters */}
         <div style={{ padding: "16px", borderBottom: "1px solid #f0f0f0" }}>
@@ -244,6 +286,18 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
                       options={entryTypes.map((type) => ({
                         label: type.name,
                         value: type.id,
+                      }))}
+                    />
+                    <Select
+                      placeholder="Filter by employee"
+                      value={selectedEmployee}
+                      onChange={setSelectedEmployee}
+                      style={{ width: "100%" }}
+                      allowClear
+                      showSearch={{ optionFilterProp: "label" }}
+                      options={employees.map((emp) => ({
+                        label: `${emp.name} (${emp.email})`,
+                        value: emp.name,
                       }))}
                     />
                     <RangePicker
