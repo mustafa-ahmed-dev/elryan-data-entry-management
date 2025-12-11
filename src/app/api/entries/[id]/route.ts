@@ -1,14 +1,7 @@
-/**
- * Entry Detail API Routes
- * GET /api/entries/[id] - Get entry details
- * PATCH /api/entries/[id] - Update entry
- * DELETE /api/entries/[id] - Delete entry
- */
-
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
-import { checkPermission, getUserPermissions } from "@/db/utils/permissions";
+import { checkPermission } from "@/db/utils/permissions";
 import { getEntryById, updateEntry, deleteEntry } from "@/db/utils/entries";
 import {
   ApiErrors,
@@ -16,26 +9,17 @@ import {
   getRequestContext,
 } from "@/lib/api/errors";
 
-interface RouteParams {
-  params: { id: string };
-}
-
-// GET /api/entries/[id]
+/**
+ * GET /api/entries/[id]
+ * Get a single entry by ID
+ */
 export const GET = withErrorHandling(
-  async (request: NextRequest, { params }: RouteParams) => {
-    const context = await getRequestContext(request);
-
+  async (req: NextRequest, { params }: { params: { id: string } }) => {
+    const context = await getRequestContext(req);
     const session = await getServerSession(authOptions);
+
     if (!session?.user) {
       return ApiErrors.unauthorized(context);
-    }
-
-    context.userId = session.user.id;
-    context.userEmail = session.user.email;
-
-    const canRead = await checkPermission(session.user.id, "entries", "read");
-    if (!canRead) {
-      return ApiErrors.insufficientPermissions(context, "entries:read");
     }
 
     const entryId = parseInt(params.id);
@@ -43,63 +27,53 @@ export const GET = withErrorHandling(
       return ApiErrors.invalidId(context, "Entry");
     }
 
+    // Check permission
+    const canRead = await checkPermission(session.user.id, "read", "entries");
+    if (!canRead) {
+      return ApiErrors.insufficientPermissions(context, "read entries");
+    }
+
     const entry = await getEntryById(entryId);
+
     if (!entry) {
       return ApiErrors.notFound(context, "Entry");
     }
 
-    // Check permission scope
-    const userPerms = await getUserPermissions(session.user.id);
-    const readPermission = userPerms?.permissions.find(
-      (p) => p.resource === "entries" && p.action === "read"
-    );
-
-    if (
-      readPermission?.scope === "own" &&
-      entry.employeeId !== session.user.id
-    ) {
-      return ApiErrors.forbidden(context, "You can only view your own entries");
-    }
-
-    if (readPermission?.scope === "team" && userPerms?.teamId) {
-      // Would need to check if entry.employeeId belongs to same team
-      // For now, we'll allow it if user has team-level permission
-    }
-
-    return NextResponse.json(
-      {
-        success: true,
-        data: entry,
-      },
-      {
-        headers: {
-          "X-Request-ID": context.requestId || "",
-        },
+    // Team leaders can only see their team's entries
+    if (session.user.role === "team_leader") {
+      if (entry.teamId !== session.user.teamId) {
+        return ApiErrors.forbidden(
+          context,
+          "You can only view entries from your team"
+        );
       }
-    );
+    }
+
+    // Employees can only see their own entries
+    if (session.user.role === "employee") {
+      if (entry.employeeId !== session.user.id) {
+        return ApiErrors.forbidden(
+          context,
+          "You can only view your own entries"
+        );
+      }
+    }
+
+    return NextResponse.json(entry, { status: 200 });
   }
 );
 
-// PATCH /api/entries/[id]
+/**
+ * PATCH /api/entries/[id]
+ * Update an entry
+ */
 export const PATCH = withErrorHandling(
-  async (request: NextRequest, { params }: RouteParams) => {
-    const context = await getRequestContext(request);
-
+  async (req: NextRequest, { params }: { params: { id: string } }) => {
+    const context = await getRequestContext(req);
     const session = await getServerSession(authOptions);
+
     if (!session?.user) {
       return ApiErrors.unauthorized(context);
-    }
-
-    context.userId = session.user.id;
-    context.userEmail = session.user.email;
-
-    const canUpdate = await checkPermission(
-      session.user.id,
-      "entries",
-      "update"
-    );
-    if (!canUpdate) {
-      return ApiErrors.insufficientPermissions(context, "entries:update");
     }
 
     const entryId = parseInt(params.id);
@@ -107,81 +81,67 @@ export const PATCH = withErrorHandling(
       return ApiErrors.invalidId(context, "Entry");
     }
 
-    const entry = await getEntryById(entryId);
-    if (!entry) {
+    // Check permission
+    const canUpdate = await checkPermission(
+      session.user.id,
+      "update",
+      "entries"
+    );
+    if (!canUpdate) {
+      return ApiErrors.insufficientPermissions(context, "update entries");
+    }
+
+    // Get existing entry
+    const existingEntry = await getEntryById(entryId);
+    if (!existingEntry) {
       return ApiErrors.notFound(context, "Entry");
     }
 
-    // Check permission scope
-    const userPerms = await getUserPermissions(session.user.id);
-    const updatePermission = userPerms?.permissions.find(
-      (p) => p.resource === "entries" && p.action === "update"
-    );
-
-    if (
-      updatePermission?.scope === "own" &&
-      entry.employeeId !== session.user.id
-    ) {
-      return ApiErrors.forbidden(
-        context,
-        "You can only update your own entries"
-      );
+    // Team leaders can only update their team's entries
+    if (session.user.role === "team_leader") {
+      if (existingEntry.teamId !== session.user.teamId) {
+        return ApiErrors.forbidden(
+          context,
+          "You can only update entries from your team"
+        );
+      }
     }
 
-    const body = await request.json();
+    // Employees can only update their own entries
+    if (session.user.role === "employee") {
+      if (existingEntry.employeeId !== session.user.id) {
+        return ApiErrors.forbidden(
+          context,
+          "You can only update your own entries"
+        );
+      }
+    }
 
-    // Build update object
+    const body = await req.json();
+
+    // Validate and build update data
     const updateData: any = {};
 
-    if (body.productName !== undefined) {
-      if (
-        typeof body.productName !== "string" ||
-        body.productName.trim().length === 0
-      ) {
+    if (body.sku !== undefined) {
+      if (typeof body.sku !== "string" || body.sku.trim().length === 0) {
         return ApiErrors.invalidInput(
           context,
-          "Product name must be a non-empty string",
-          "productName"
+          "SKU must be a non-empty string",
+          "sku"
         );
       }
-      updateData.productName = body.productName.trim();
+      updateData.sku = body.sku.trim();
     }
 
-    if (body.productDescription !== undefined) {
-      updateData.productDescription = body.productDescription;
-    }
-
-    if (body.followsNamingConvention !== undefined) {
-      if (typeof body.followsNamingConvention !== "boolean") {
+    if (body.entryTypeId !== undefined) {
+      if (typeof body.entryTypeId !== "number") {
         return ApiErrors.invalidInput(
           context,
-          "followsNamingConvention must be a boolean",
-          "followsNamingConvention"
+          "Entry type ID must be a number",
+          "entryTypeId"
         );
       }
-      updateData.followsNamingConvention = body.followsNamingConvention;
-    }
-
-    if (body.followsSpecificationOrder !== undefined) {
-      if (typeof body.followsSpecificationOrder !== "boolean") {
-        return ApiErrors.invalidInput(
-          context,
-          "followsSpecificationOrder must be a boolean",
-          "followsSpecificationOrder"
-        );
-      }
-      updateData.followsSpecificationOrder = body.followsSpecificationOrder;
-    }
-
-    if (body.containsUnwantedKeywords !== undefined) {
-      if (typeof body.containsUnwantedKeywords !== "boolean") {
-        return ApiErrors.invalidInput(
-          context,
-          "containsUnwantedKeywords must be a boolean",
-          "containsUnwantedKeywords"
-        );
-      }
-      updateData.containsUnwantedKeywords = body.containsUnwantedKeywords;
+      updateData.entryTypeId = body.entryTypeId;
     }
 
     if (Object.keys(updateData).length === 0) {
@@ -192,39 +152,25 @@ export const PATCH = withErrorHandling(
 
     return NextResponse.json(
       {
-        success: true,
-        data: updatedEntry,
         message: "Entry updated successfully",
+        data: updatedEntry,
       },
-      {
-        headers: {
-          "X-Request-ID": context.requestId || "",
-        },
-      }
+      { status: 200 }
     );
   }
 );
 
-// DELETE /api/entries/[id]
+/**
+ * DELETE /api/entries/[id]
+ * Delete an entry
+ */
 export const DELETE = withErrorHandling(
-  async (request: NextRequest, { params }: RouteParams) => {
-    const context = await getRequestContext(request);
-
+  async (req: NextRequest, { params }: { params: { id: string } }) => {
+    const context = await getRequestContext(req);
     const session = await getServerSession(authOptions);
+
     if (!session?.user) {
       return ApiErrors.unauthorized(context);
-    }
-
-    context.userId = session.user.id;
-    context.userEmail = session.user.email;
-
-    const canDelete = await checkPermission(
-      session.user.id,
-      "entries",
-      "delete"
-    );
-    if (!canDelete) {
-      return ApiErrors.insufficientPermissions(context, "entries:delete");
     }
 
     const entryId = parseInt(params.id);
@@ -232,40 +178,37 @@ export const DELETE = withErrorHandling(
       return ApiErrors.invalidId(context, "Entry");
     }
 
-    const entry = await getEntryById(entryId);
-    if (!entry) {
+    // Check permission
+    const canDelete = await checkPermission(
+      session.user.id,
+      "delete",
+      "entries"
+    );
+    if (!canDelete) {
+      return ApiErrors.insufficientPermissions(context, "delete entries");
+    }
+
+    // Get existing entry
+    const existingEntry = await getEntryById(entryId);
+    if (!existingEntry) {
       return ApiErrors.notFound(context, "Entry");
     }
 
-    // Check permission scope
-    const userPerms = await getUserPermissions(session.user.id);
-    const deletePermission = userPerms?.permissions.find(
-      (p) => p.resource === "entries" && p.action === "delete"
-    );
-
-    if (
-      deletePermission?.scope === "own" &&
-      entry.employeeId !== session.user.id
-    ) {
-      return ApiErrors.forbidden(
-        context,
-        "You can only delete your own entries"
-      );
+    // Team leaders can only delete their team's entries
+    if (session.user.role === "team_leader") {
+      if (existingEntry.teamId !== session.user.teamId) {
+        return ApiErrors.forbidden(
+          context,
+          "You can only delete entries from your team"
+        );
+      }
     }
 
     await deleteEntry(entryId);
 
     return NextResponse.json(
-      {
-        success: true,
-        message: "Entry deleted successfully",
-        data: { id: entryId },
-      },
-      {
-        headers: {
-          "X-Request-ID": context.requestId || "",
-        },
-      }
+      { message: "Entry deleted successfully" },
+      { status: 200 }
     );
   }
 );

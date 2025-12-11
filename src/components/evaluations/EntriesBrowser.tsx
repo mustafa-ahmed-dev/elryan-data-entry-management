@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import {
   Input,
@@ -21,6 +23,7 @@ import {
   ReloadOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
+  BarcodeOutlined,
 } from "@ant-design/icons";
 import dayjs, { Dayjs } from "dayjs";
 
@@ -29,15 +32,11 @@ const { RangePicker } = DatePicker;
 
 interface Entry {
   id: number;
-  productName: string;
-  productDescription: string;
+  sku: string;
   employeeName: string;
   employeeEmail: string;
   entryTypeName: string;
   entryTime: string;
-  followsNamingConvention: boolean;
-  followsSpecificationOrder: boolean;
-  containsUnwantedKeywords: boolean;
   hasEvaluation: boolean;
 }
 
@@ -79,6 +78,7 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
   // Apply filters whenever entries or filter criteria change
   useEffect(() => {
     applyFilters();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entries, searchText, selectedType, dateRange]);
 
   const fetchEntries = async () => {
@@ -132,15 +132,20 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
   };
 
   const applyFilters = () => {
+    if (!Array.isArray(entries)) {
+      setFilteredEntries([]);
+      return;
+    }
+
     let filtered = [...entries];
 
-    // Search filter
+    // Search filter (ID, SKU, employee)
     if (searchText) {
       const search = searchText.toLowerCase();
       filtered = filtered.filter(
         (entry) =>
           entry.id.toString().includes(search) ||
-          entry.productName.toLowerCase().includes(search) ||
+          entry.sku.toLowerCase().includes(search) ||
           entry.employeeName.toLowerCase().includes(search) ||
           entry.employeeEmail.toLowerCase().includes(search)
       );
@@ -179,133 +184,101 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
     setDateRange(null);
   };
 
-  const getQualityIcon = (entry: Entry) => {
-    const issues = [
-      !entry.followsNamingConvention,
-      !entry.followsSpecificationOrder,
-      entry.containsUnwantedKeywords,
-    ].filter(Boolean).length;
-
-    if (issues === 0) {
-      return <CheckCircleOutlined style={{ color: "#52c41a" }} />;
-    }
-    return <CloseCircleOutlined style={{ color: "#ff4d4f" }} />;
-  };
-
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+    <div style={{ height: "100%" }}>
       <Card
-        style={{ flex: 1, display: "flex", flexDirection: "column" }}
-        styles={{
-          body: {
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            padding: 0,
-          },
-        }}
+        title={
+          <Space>
+            <Title level={5} style={{ margin: 0 }}>
+              Unevaluated Entries
+            </Title>
+            <Badge count={filteredEntries.length} showZero color="blue" />
+          </Space>
+        }
+        extra={
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={handleRefresh}
+            loading={loading}
+          >
+            Refresh
+          </Button>
+        }
+        style={{ height: "100%" }}
+        styles={{ body: { padding: 0, height: "calc(100% - 57px)" } }}
       >
+        {/* Filters */}
         <div style={{ padding: "16px", borderBottom: "1px solid #f0f0f0" }}>
-          <Space orientation="vertical" style={{ width: "100%" }} size="middle">
+          <Collapse
+            ghost
+            activeKey={filtersCollapsed ? [] : ["1"]}
+            onChange={(keys) => setFiltersCollapsed(keys.length === 0)}
+            items={[
+              {
+                key: "1",
+                label: (
+                  <Space>
+                    <FilterOutlined />
+                    <Text strong>Filters</Text>
+                  </Space>
+                ),
+                children: (
+                  <Space
+                    direction="vertical"
+                    style={{ width: "100%" }}
+                    size="middle"
+                  >
+                    <Input
+                      placeholder="Search by ID, SKU, or employee..."
+                      prefix={<SearchOutlined />}
+                      value={searchText}
+                      onChange={(e) => setSearchText(e.target.value)}
+                      allowClear
+                    />
+                    <Select
+                      placeholder="Filter by entry type"
+                      value={selectedType}
+                      onChange={setSelectedType}
+                      style={{ width: "100%" }}
+                      allowClear
+                      options={entryTypes.map((type) => ({
+                        label: type.name,
+                        value: type.id,
+                      }))}
+                    />
+                    <RangePicker
+                      value={dateRange}
+                      onChange={(dates) => setDateRange(dates as any)}
+                      style={{ width: "100%" }}
+                      format="YYYY-MM-DD"
+                    />
+                    <Button block onClick={clearFilters}>
+                      Clear Filters
+                    </Button>
+                  </Space>
+                ),
+              },
+            ]}
+          />
+        </div>
+
+        {/* Entries List */}
+        <div style={{ height: "calc(100% - 150px)", overflow: "auto" }}>
+          {loading && entries.length === 0 ? (
             <div
               style={{
                 display: "flex",
-                justifyContent: "space-between",
+                justifyContent: "center",
                 alignItems: "center",
+                height: "200px",
               }}
             >
-              <Title level={5} style={{ margin: 0 }}>
-                <Badge count={filteredEntries.length} showZero>
-                  <span style={{ marginRight: 8 }}>Entries to Evaluate</span>
-                </Badge>
-              </Title>
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={handleRefresh}
-                size="small"
-                loading={loading}
-              >
-                Refresh
-              </Button>
-            </div>
-
-            <Input
-              placeholder="Search by ID, product, or employee..."
-              prefix={<SearchOutlined />}
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              allowClear
-            />
-
-            <Collapse
-              ghost
-              activeKey={filtersCollapsed ? [] : ["filters"]}
-              onChange={() => setFiltersCollapsed(!filtersCollapsed)}
-              items={[
-                {
-                  key: "filters",
-                  label: (
-                    <Space>
-                      <FilterOutlined />
-                      <Text>Filters</Text>
-                      {(selectedType || dateRange) && (
-                        <Tag color="blue">
-                          {[selectedType, dateRange].filter(Boolean).length}{" "}
-                          active
-                        </Tag>
-                      )}
-                    </Space>
-                  ),
-                  children: (
-                    <Space
-                      orientation="vertical"
-                      style={{ width: "100%" }}
-                      size="middle"
-                    >
-                      <Select
-                        placeholder="Filter by entry type"
-                        style={{ width: "100%" }}
-                        value={selectedType}
-                        onChange={setSelectedType}
-                        allowClear
-                      >
-                        {entryTypes.map((type) => (
-                          <Select.Option key={type.id} value={type.id}>
-                            {type.name}
-                          </Select.Option>
-                        ))}
-                      </Select>
-
-                      <RangePicker
-                        style={{ width: "100%" }}
-                        value={dateRange}
-                        onChange={(dates) =>
-                          setDateRange(dates as [Dayjs, Dayjs] | null)
-                        }
-                      />
-
-                      {(selectedType || dateRange || searchText) && (
-                        <Button onClick={clearFilters} size="small" block>
-                          Clear All Filters
-                        </Button>
-                      )}
-                    </Space>
-                  ),
-                },
-              ]}
-            />
-          </Space>
-        </div>
-
-        <div style={{ flex: 1, overflow: "auto" }}>
-          {loading && filteredEntries.length === 0 ? (
-            <div style={{ padding: "40px", textAlign: "center" }}>
-              <Spin />
+              <Spin tip="Loading entries..." />
             </div>
           ) : filteredEntries.length === 0 ? (
             <Empty
-              description="No entries to evaluate"
-              style={{ marginTop: "40px" }}
+              description="No unevaluated entries found"
+              style={{ marginTop: "50px" }}
             />
           ) : (
             <List
@@ -327,10 +300,23 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
                   className="entry-list-item"
                 >
                   <List.Item.Meta
-                    avatar={getQualityIcon(entry)}
+                    avatar={
+                      entry.hasEvaluation ? (
+                        <CheckCircleOutlined
+                          style={{ color: "#52c41a", fontSize: 20 }}
+                        />
+                      ) : (
+                        <CloseCircleOutlined
+                          style={{ color: "#d9d9d9", fontSize: 20 }}
+                        />
+                      )
+                    }
                     title={
-                      <Space orientation="vertical" size={0}>
-                        <Text strong>{entry.productName}</Text>
+                      <Space direction="vertical" size={0}>
+                        <Space>
+                          <BarcodeOutlined />
+                          <Text strong>{entry.sku}</Text>
+                        </Space>
                         <Text type="secondary" style={{ fontSize: "12px" }}>
                           ID: {entry.id}
                         </Text>
@@ -338,7 +324,7 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
                     }
                     description={
                       <Space
-                        orientation="vertical"
+                        direction="vertical"
                         size={2}
                         style={{ width: "100%" }}
                       >

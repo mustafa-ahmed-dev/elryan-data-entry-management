@@ -1,22 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Table,
-  Tag,
-  Button,
-  Space,
-  Popconfirm,
-  message,
-  Skeleton,
-  Empty,
-  Badge,
-} from "antd";
+import { Table, Tag, Button, Space, Popconfirm, message } from "antd";
 import {
   DeleteOutlined,
   EyeOutlined,
   CheckCircleOutlined,
-  CloseCircleOutlined,
 } from "@ant-design/icons";
 import type { ColumnsType, TablePaginationConfig } from "antd/es/table";
 import dayjs from "dayjs";
@@ -29,11 +18,7 @@ interface Entry {
   employeeEmail: string;
   entryTypeId: number;
   entryTypeName: string;
-  productName: string;
-  productDescription: string;
-  followsNamingConvention: boolean;
-  followsSpecificationOrder: boolean;
-  containsUnwantedKeywords: boolean;
+  sku: string;
   entryTime: string;
   hasEvaluation: boolean;
 }
@@ -65,27 +50,6 @@ export function EntryTable({
 
   const isAdmin = userRole === "admin";
 
-  // Calculate quality status
-  const getQualityStatus = (entry: Entry) => {
-    const issues = [
-      !entry.followsNamingConvention,
-      !entry.followsSpecificationOrder,
-      entry.containsUnwantedKeywords,
-    ].filter(Boolean).length;
-
-    if (issues === 0) {
-      return { color: "success", text: "All Pass", count: 0 };
-    } else if (issues <= 2) {
-      return {
-        color: "warning",
-        text: `${issues} Issue${issues > 1 ? "s" : ""}`,
-        count: issues,
-      };
-    } else {
-      return { color: "error", text: "3 Issues", count: 3 };
-    }
-  };
-
   const handleDelete = async (id: number) => {
     if (!onDelete) return;
 
@@ -114,11 +78,12 @@ export function EntryTable({
       sorter: (a, b) => a.id - b.id,
     },
     {
-      title: "Product Name",
-      dataIndex: "productName",
-      key: "productName",
+      title: "SKU",
+      dataIndex: "sku",
+      key: "sku",
       ellipsis: true,
-      sorter: (a, b) => a.productName.localeCompare(b.productName),
+      sorter: (a, b) => a.sku.localeCompare(b.sku),
+      render: (text) => <span style={{ fontWeight: 500 }}>{text}</span>,
     },
     {
       title: "Employee",
@@ -139,6 +104,7 @@ export function EntryTable({
       dataIndex: "entryTypeName",
       key: "entryTypeName",
       ellipsis: true,
+      render: (text) => <Tag color="blue">{text}</Tag>,
     },
     {
       title: "Entry Time",
@@ -147,27 +113,6 @@ export function EntryTable({
       width: 180,
       sorter: (a, b) => dayjs(a.entryTime).unix() - dayjs(b.entryTime).unix(),
       render: (text) => dayjs(text).format("YYYY-MM-DD HH:mm"),
-    },
-    {
-      title: "Quality Status",
-      key: "qualityStatus",
-      width: 130,
-      render: (_, record) => {
-        const status = getQualityStatus(record);
-        return <Badge status={status.color as any} text={status.text} />;
-      },
-      filters: [
-        { text: "All Pass", value: "pass" },
-        { text: "Has Issues", value: "issues" },
-        { text: "All Fail", value: "fail" },
-      ],
-      onFilter: (value, record) => {
-        const status = getQualityStatus(record);
-        if (value === "pass") return status.count === 0;
-        if (value === "issues") return status.count > 0 && status.count < 3;
-        if (value === "fail") return status.count === 3;
-        return true;
-      },
     },
     {
       title: "Evaluated",
@@ -180,9 +125,7 @@ export function EntryTable({
             Yes
           </Tag>
         ) : (
-          <Tag icon={<CloseCircleOutlined />} color="default">
-            No
-          </Tag>
+          <Tag color="default">No</Tag>
         ),
       filters: [
         { text: "Evaluated", value: true },
@@ -193,17 +136,14 @@ export function EntryTable({
     {
       title: "Actions",
       key: "actions",
-      width: 120,
+      width: 140,
       fixed: "right",
       render: (_, record) => (
         <Space size="small">
           <Button
-            type="link"
+            type="text"
             icon={<EyeOutlined />}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleRowClick(record);
-            }}
+            onClick={() => handleRowClick(record)}
           >
             View
           </Button>
@@ -211,20 +151,15 @@ export function EntryTable({
             <Popconfirm
               title="Delete Entry"
               description="Are you sure you want to delete this entry?"
-              onConfirm={(e) => {
-                e?.stopPropagation();
-                handleDelete(record.id);
-              }}
+              onConfirm={() => handleDelete(record.id)}
               okText="Yes"
               cancelText="No"
-              okButtonProps={{ danger: true }}
             >
               <Button
-                type="link"
+                type="text"
                 danger
                 icon={<DeleteOutlined />}
                 loading={deleting === record.id}
-                onClick={(e) => e.stopPropagation()}
               >
                 Delete
               </Button>
@@ -235,43 +170,34 @@ export function EntryTable({
     },
   ];
 
-  if (loading && entries.length === 0) {
-    return <Skeleton active paragraph={{ rows: 8 }} />;
-  }
+  const handleTableChange = (paginationConfig: TablePaginationConfig) => {
+    const page = paginationConfig.current || 1;
+    const pageSize = paginationConfig.pageSize || 10;
+    onPageChange(page, pageSize);
+  };
 
   return (
     <>
       <Table
         columns={columns}
         dataSource={entries}
-        rowKey="id"
         loading={loading}
+        rowKey="id"
         pagination={{
           current: pagination.current,
           pageSize: pagination.pageSize,
           total: pagination.total,
           showSizeChanger: true,
-          showTotal: (total) => `Total ${total} entries`,
-          pageSizeOptions: ["10", "20", "50", "100"],
+          showQuickJumper: true,
+          pageSizeOptions: ["10", "25", "50", "100"],
+          showTotal: (total, range) =>
+            `${range[0]}-${range[1]} of ${total} entries`,
         }}
-        onChange={(paginationConfig: TablePaginationConfig) => {
-          onPageChange(
-            paginationConfig.current || 1,
-            paginationConfig.pageSize || 10
-          );
-        }}
-        locale={{
-          emptyText: (
-            <Empty
-              description="No entries found"
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-            />
-          ),
-        }}
-        scroll={{ x: 1200 }}
+        onChange={handleTableChange}
+        scroll={{ x: 1000 }}
         onRow={(record) => ({
-          onClick: () => handleRowClick(record),
           style: { cursor: "pointer" },
+          onClick: () => handleRowClick(record),
         })}
       />
 

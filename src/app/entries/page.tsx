@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { redirect } from "next/navigation";
-import EntriesClient from "./EntriesClient";
+import { EntriesClient } from "./EntriesClient";
 
 export const metadata = {
   title: "Entries | Data Entry Management",

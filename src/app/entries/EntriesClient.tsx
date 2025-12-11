@@ -5,7 +5,6 @@ import { Card, Row, Col, Statistic, Tabs, Space, message } from "antd";
 import {
   FileTextOutlined,
   CalendarOutlined,
-  TrophyOutlined,
   PlusOutlined,
   UnorderedListOutlined,
   CheckCircleOutlined,
@@ -33,11 +32,7 @@ interface Entry {
   employeeEmail: string;
   entryTypeId: number;
   entryTypeName: string;
-  productName: string;
-  productDescription: string;
-  followsNamingConvention: boolean;
-  followsSpecificationOrder: boolean;
-  containsUnwantedKeywords: boolean;
+  sku: string;
   entryTime: string;
   hasEvaluation: boolean;
 }
@@ -46,10 +41,10 @@ interface Statistics {
   total: number;
   today: number;
   thisWeek: number;
-  qualityPassRate: number;
+  evaluatedRate: number;
 }
 
-export default function EntriesClient({ user }: EntriesClientProps) {
+export function EntriesClient({ user }: EntriesClientProps) {
   const [activeTab, setActiveTab] = useState("1");
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -57,7 +52,7 @@ export default function EntriesClient({ user }: EntriesClientProps) {
     total: 0,
     today: 0,
     thisWeek: 0,
-    qualityPassRate: 0,
+    evaluatedRate: 0,
   });
   const [filters, setFilters] = useState<FilterValues>({});
   const [pagination, setPagination] = useState({
@@ -65,11 +60,28 @@ export default function EntriesClient({ user }: EntriesClientProps) {
     pageSize: 10,
     total: 0,
   });
+  const [entryTypes, setEntryTypes] = useState<any[]>([]);
 
   useEffect(() => {
     fetchEntries();
     fetchStatistics();
   }, [filters, pagination.current, pagination.pageSize]);
+
+  useEffect(() => {
+    fetchEntryTypes();
+  }, []);
+
+  const fetchEntryTypes = async () => {
+    try {
+      const response = await fetch("/api/entry-types");
+      if (response.ok) {
+        const result = await response.json();
+        setEntryTypes(result.data || result || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch entry types:", error);
+    }
+  };
 
   const fetchEntries = async () => {
     try {
@@ -89,9 +101,6 @@ export default function EntriesClient({ user }: EntriesClientProps) {
       if (filters.employeeId)
         params.append("employeeId", filters.employeeId.toString());
       if (filters.teamId) params.append("teamId", filters.teamId.toString());
-      if (filters.qualityStatus && filters.qualityStatus !== "all") {
-        params.append("qualityStatus", filters.qualityStatus);
-      }
       if (filters.evaluationStatus && filters.evaluationStatus !== "all") {
         params.append(
           "hasEvaluation",
@@ -99,22 +108,20 @@ export default function EntriesClient({ user }: EntriesClientProps) {
         );
       }
 
-      const response = await fetch(`/api/entries?${params.toString()}`);
+      const response = await fetch(`/api/entries?${params}`);
 
       if (!response.ok) {
         throw new Error("Failed to fetch entries");
       }
 
       const data = await response.json();
-
-      setEntries(data.entries || []);
+      setEntries(data.data || []);
       setPagination((prev) => ({
         ...prev,
-        total: data.total || 0,
+        total: data.pagination?.total || 0,
       }));
     } catch (error: any) {
       message.error(error.message || "Failed to load entries");
-      console.error(error);
     } finally {
       setLoading(false);
     }
@@ -122,36 +129,60 @@ export default function EntriesClient({ user }: EntriesClientProps) {
 
   const fetchStatistics = async () => {
     try {
-      const response = await fetch("/api/entries/statistics");
+      const params = new URLSearchParams();
+      if (filters.startDate) params.append("startDate", filters.startDate);
+      if (filters.endDate) params.append("endDate", filters.endDate);
+      if (filters.employeeId)
+        params.append("employeeId", filters.employeeId.toString());
+      if (filters.teamId) params.append("teamId", filters.teamId.toString());
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch statistics");
+      const response = await fetch(`/api/entries/stats?${params}`);
+
+      if (response.ok) {
+        const data = await response.json();
+        setStatistics({
+          total: data.totalEntries || 0,
+          today: data.todayEntries || 0,
+          thisWeek: data.weekEntries || 0,
+          evaluatedRate: data.evaluatedRate || 0,
+        });
       }
-
-      const data = await response.json();
-
-      setStatistics({
-        total: data.total || 0,
-        today: data.today || 0,
-        thisWeek: data.thisWeek || 0,
-        qualityPassRate: data.qualityPassRate || 0,
-      });
     } catch (error) {
-      console.error("Failed to load statistics:", error);
-      // Don't show error message for statistics as it's not critical
+      console.error("Failed to fetch statistics:", error);
     }
   };
 
   const handleFilterChange = (newFilters: FilterValues) => {
     setFilters(newFilters);
-    setPagination((prev) => ({ ...prev, current: 1 })); // Reset to first page
+    setPagination((prev) => ({ ...prev, current: 1 }));
   };
 
   const handlePageChange = (page: number, pageSize: number) => {
-    setPagination({ current: page, pageSize, total: pagination.total });
+    setPagination((prev) => ({ ...prev, current: page, pageSize }));
   };
 
-  const handleDelete = async (id: number) => {
+  const handleCreateEntry = async (values: any) => {
+    try {
+      const response = await fetch("/api/entries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to create entry");
+      }
+
+      message.success("Entry created successfully!");
+      fetchEntries();
+      fetchStatistics();
+    } catch (error: any) {
+      throw error;
+    }
+  };
+
+  const handleDeleteEntry = async (id: number) => {
     try {
       const response = await fetch(`/api/entries/${id}`, {
         method: "DELETE",
@@ -161,35 +192,72 @@ export default function EntriesClient({ user }: EntriesClientProps) {
         throw new Error("Failed to delete entry");
       }
 
-      // Refresh data
-      await fetchEntries();
-      await fetchStatistics();
+      fetchEntries();
+      fetchStatistics();
     } catch (error: any) {
       throw error;
     }
   };
 
-  const handleCreateSuccess = () => {
-    // Switch to view tab
-    setActiveTab("2");
-    // Refresh data
-    fetchEntries();
-    fetchStatistics();
-  };
+  const tabItems = [
+    {
+      key: "1",
+      label: (
+        <span>
+          <UnorderedListOutlined />
+          All Entries
+        </span>
+      ),
+      children: (
+        <Space orientation="vertical" size="large" style={{ width: "100%" }}>
+          <EntryFilter
+            onFilterChange={handleFilterChange}
+            userRole={user.role}
+            currentFilters={filters}
+          />
+          <EntryTable
+            entries={entries}
+            loading={loading}
+            pagination={pagination}
+            onPageChange={handlePageChange}
+            onDelete={handleDeleteEntry}
+            userRole={user.role}
+          />
+        </Space>
+      ),
+    },
+    {
+      key: "2",
+      label: (
+        <span>
+          <PlusOutlined />
+          Create Entry
+        </span>
+      ),
+      children: (
+        <EntryForm
+          entryTypes={entryTypes}
+          onSubmit={handleCreateEntry}
+          employeeId={user.id}
+        />
+      ),
+    },
+  ];
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute
+      requiredPermission={{ action: "read", resource: "entries" }}
+    >
       <MainLayout>
         <Space orientation="vertical" size="large" style={{ width: "100%" }}>
-          {/* Statistics Cards */}
-          <Row gutter={[16, 16]}>
+          {/* Statistics */}
+          <Row gutter={16}>
             <Col xs={24} sm={12} lg={6}>
               <Card>
                 <Statistic
                   title="Total Entries"
                   value={statistics.total}
                   prefix={<FileTextOutlined />}
-                  styles={{content:  {color: "#1890ff" }}}
                 />
               </Card>
             </Col>
@@ -199,7 +267,6 @@ export default function EntriesClient({ user }: EntriesClientProps) {
                   title="Today's Entries"
                   value={statistics.today}
                   prefix={<CalendarOutlined />}
-                  styles={{content: { color: "#52c41a" }}}
                 />
               </Card>
             </Col>
@@ -208,29 +275,17 @@ export default function EntriesClient({ user }: EntriesClientProps) {
                 <Statistic
                   title="This Week"
                   value={statistics.thisWeek}
-                  prefix={<CheckCircleOutlined />}
-                  styles={{content: { color: "#faad14" }}}
+                  prefix={<FileTextOutlined />}
                 />
               </Card>
             </Col>
             <Col xs={24} sm={12} lg={6}>
               <Card>
                 <Statistic
-                  title="Quality Pass Rate"
-                  value={statistics.qualityPassRate}
+                  title="Evaluated Rate"
+                  value={statistics.evaluatedRate}
                   suffix="%"
-                  precision={1}
-                  prefix={<TrophyOutlined />}
-                  styles={{
-                    content: {
-                      color:
-                        statistics.qualityPassRate >= 80
-                          ? "#52c41a"
-                          : statistics.qualityPassRate >= 60
-                          ? "#faad14"
-                          : "#ff4d4f",
-                    },
-                  }}
+                  prefix={<CheckCircleOutlined />}
                 />
               </Card>
             </Col>
@@ -241,55 +296,7 @@ export default function EntriesClient({ user }: EntriesClientProps) {
             <Tabs
               activeKey={activeTab}
               onChange={setActiveTab}
-              items={[
-                {
-                  key: "1",
-                  label: (
-                    <span>
-                      <PlusOutlined />
-                      Create Entry
-                    </span>
-                  ),
-                  children: (
-                    <EntryForm
-                      employeeId={user.id}
-                      onSuccess={handleCreateSuccess}
-                    />
-                  ),
-                },
-                {
-                  key: "2",
-                  label: (
-                    <span>
-                      <UnorderedListOutlined />
-                      View Entries
-                    </span>
-                  ),
-                  children: (
-                    <Space
-                      orientation="vertical"
-                      size="middle"
-                      style={{ width: "100%" }}
-                    >
-                      <EntryFilter
-                        onFilterChange={handleFilterChange}
-                        userRole={user.role}
-                        currentFilters={filters}
-                      />
-                      <EntryTable
-                        entries={entries}
-                        loading={loading}
-                        pagination={pagination}
-                        onPageChange={handlePageChange}
-                        onDelete={
-                          user.role === "admin" ? handleDelete : undefined
-                        }
-                        userRole={user.role}
-                      />
-                    </Space>
-                  ),
-                },
-              ]}
+              items={tabItems}
             />
           </Card>
         </Space>

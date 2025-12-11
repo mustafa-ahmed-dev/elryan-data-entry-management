@@ -1,5 +1,5 @@
 {
-  "id": "df7a3e32-d47e-4a8e-a1c8-ce85a7f15e45",
+  "id": "67e2f1c6-9797-4812-9c36-9582bf9de10c",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -78,38 +78,11 @@
           "primaryKey": false,
           "notNull": true
         },
-        "product_name": {
-          "name": "product_name",
-          "type": "varchar(500)",
+        "sku": {
+          "name": "sku",
+          "type": "varchar(100)",
           "primaryKey": false,
           "notNull": true
-        },
-        "product_description": {
-          "name": "product_description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "follows_naming_convention": {
-          "name": "follows_naming_convention",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
-        "follows_specification_order": {
-          "name": "follows_specification_order",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
-        "contains_unwanted_keywords": {
-          "name": "contains_unwanted_keywords",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
         },
         "entry_time": {
           "name": "entry_time",

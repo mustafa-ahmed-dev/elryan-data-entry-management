@@ -1,28 +1,19 @@
-/**
- * Entries API Routes - WITH ENHANCED ERROR HANDLING (FIXED)
- * GET /api/entries - List entries
- * POST /api/entries - Create entry
- */
-
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { checkPermission, getUserPermissions } from "@/db/utils/permissions";
-import {
-  getEntries,
-  createEntry,
-  bulkCreateEntries,
-  getEntryStats,
-} from "@/db/utils/entries";
+import { getEntries, createEntry, bulkCreateEntries } from "@/db/utils/entries";
 import {
   ApiErrors,
   withErrorHandling,
   getRequestContext,
 } from "@/lib/api/errors";
 
-// GET /api/entries - List entries
+/**
+ * GET /api/entries
+ * Get entries with optional filters
+ */
 export const GET = withErrorHandling(async (request: NextRequest) => {
-  // 🔥 STEP 1: Get context FIRST!
   const context = await getRequestContext(request);
 
   const session = await getServerSession(authOptions);
@@ -30,7 +21,6 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
     return ApiErrors.unauthorized(context);
   }
 
-  // Add user info to context
   context.userId = session.user.id;
   context.userEmail = session.user.email;
 
@@ -39,122 +29,60 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
     return ApiErrors.insufficientPermissions(context, "entries:read");
   }
 
-  const userPerms = await getUserPermissions(session.user.id);
-  if (!userPerms) {
-    return ApiErrors.forbidden(context);
-  }
-
-  // Get query parameters
-  const searchParams = request.nextUrl.searchParams;
+  // Parse query parameters
+  const { searchParams } = new URL(request.url);
+  const page = parseInt(searchParams.get("page") || "1");
+  const limit = parseInt(searchParams.get("limit") || "10");
   const employeeId = searchParams.get("employeeId");
   const teamId = searchParams.get("teamId");
   const entryTypeId = searchParams.get("entryTypeId");
-  const startDate = searchParams.get("startDate") || undefined;
-  const endDate = searchParams.get("endDate") || undefined;
-  const date = searchParams.get("date") || undefined;
-  const page = parseInt(searchParams.get("page") || "1");
-  const pageSize = parseInt(searchParams.get("pageSize") || "20");
-  const includeStats = searchParams.get("stats") === "true";
+  const startDate = searchParams.get("startDate");
+  const endDate = searchParams.get("endDate");
+  const hasEvaluation = searchParams.get("hasEvaluation");
 
-  // Validate pagination
-  if (page < 1) {
-    return ApiErrors.invalidInput(context, "Page must be >= 1", "page");
-  }
-  if (pageSize < 1 || pageSize > 100) {
-    return ApiErrors.invalidInput(
-      context,
-      "Page size must be between 1 and 100",
-      "pageSize"
-    );
-  }
-
-  // Validate date range if both provided
-  if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
-    return ApiErrors.invalidDateRange(context);
-  }
-
-  // Build filters based on permission scope
+  // Build filters
   const filters: any = {
     page,
-    pageSize,
-    startDate,
-    endDate,
-    date,
+    pageSize: limit,
   };
 
-  if (employeeId) {
-    const empId = parseInt(employeeId);
-    if (isNaN(empId)) {
-      return ApiErrors.invalidInput(
-        context,
-        "Invalid employee ID",
-        "employeeId"
-      );
-    }
-    filters.employeeId = empId;
+  if (employeeId) filters.employeeId = parseInt(employeeId);
+  if (teamId) filters.teamId = parseInt(teamId);
+  if (entryTypeId) filters.entryTypeId = parseInt(entryTypeId);
+  if (startDate) filters.startDate = startDate;
+  if (endDate) filters.endDate = endDate;
+  if (hasEvaluation !== null) {
+    filters.hasEvaluation = hasEvaluation === "true";
   }
 
-  if (teamId) {
-    const tId = parseInt(teamId);
-    if (isNaN(tId)) {
-      return ApiErrors.invalidInput(context, "Invalid team ID", "teamId");
-    }
-    filters.teamId = tId;
-  }
-
-  if (entryTypeId) {
-    const typeId = parseInt(entryTypeId);
-    if (isNaN(typeId)) {
-      return ApiErrors.invalidInput(
-        context,
-        "Invalid entry type ID",
-        "entryTypeId"
-      );
-    }
-    filters.entryTypeId = typeId;
-  }
-
-  // Apply permission-based filtering
-  const readPermission = userPerms.permissions.find(
-    (p) => p.resource === "entries" && p.action === "read"
-  );
-
-  if (readPermission?.scope === "own") {
+  // Apply role-based filtering
+  if (session.user.role === "employee") {
     filters.employeeId = session.user.id;
-  } else if (readPermission?.scope === "team") {
-    if (userPerms.teamId) {
-      filters.teamId = userPerms.teamId;
-    }
+  } else if (session.user.role === "team_leader") {
+    filters.teamId = session.user.teamId;
   }
 
   const result = await getEntries(filters);
 
-  const response: any = {
-    success: true,
-    data: result.data,
-    pagination: {
-      page: result.pagination.page,
-      pageSize: result.pagination.pageSize,
-      total: result.pagination.total,
-      totalPages: result.pagination.totalPages,
+  return NextResponse.json(
+    {
+      success: true,
+      data: result.data,
+      pagination: result.pagination,
     },
-  };
-
-  if (includeStats) {
-    const stats = await getEntryStats(filters);
-    response.stats = stats;
-  }
-
-  return NextResponse.json(response, {
-    headers: {
-      "X-Request-ID": context.requestId || "",
-    },
-  });
+    {
+      headers: {
+        "X-Request-ID": context.requestId || "",
+      },
+    }
+  );
 });
 
-// POST /api/entries - Create entry
+/**
+ * POST /api/entries
+ * Create a new entry or bulk create entries
+ */
 export const POST = withErrorHandling(async (request: NextRequest) => {
-  // 🔥 STEP 1: Get context FIRST!
   const context = await getRequestContext(request);
 
   const session = await getServerSession(authOptions);
@@ -183,11 +111,8 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
       if (!entry.entryTypeId) {
         return ApiErrors.missingField(context, `entries[${i}].entryTypeId`);
       }
-      if (!entry.entryName) {
-        return ApiErrors.missingField(context, `entries[${i}].entryName`);
-      }
-      if (!entry.timestamp) {
-        return ApiErrors.missingField(context, `entries[${i}].timestamp`);
+      if (!entry.sku) {
+        return ApiErrors.missingField(context, `entries[${i}].sku`);
       }
     }
 
@@ -215,8 +140,8 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   if (!body.entryTypeId) {
     return ApiErrors.missingField(context, "entryTypeId");
   }
-  if (!body.productName) {
-    return ApiErrors.missingField(context, "productName");
+  if (!body.sku) {
+    return ApiErrors.missingField(context, "sku");
   }
 
   // Validate IDs
@@ -238,6 +163,15 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     );
   }
 
+  // Validate SKU
+  if (typeof body.sku !== "string" || body.sku.trim().length === 0) {
+    return ApiErrors.invalidInput(
+      context,
+      "SKU must be a non-empty string",
+      "sku"
+    );
+  }
+
   // Check permission scope
   const userPerms = await getUserPermissions(session.user.id);
   const createPermission = userPerms?.permissions.find(
@@ -254,12 +188,8 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
   const entry = await createEntry({
     employeeId,
     entryTypeId,
-    productName: body.productName,
-    productDescription: body.productDescription,
-    followsNamingConvention: body.followsNamingConvention,
-    followsSpecificationOrder: body.followsSpecificationOrder,
-    containsUnwantedKeywords: body.containsUnwantedKeywords,
-    entryTime: body.entryTime ? new Date(body.entryTime) : undefined,
+    sku: body.sku.trim(),
+    entryTime: body.entryTime ? new Date(body.entryTime) : new Date(),
   });
 
   return NextResponse.json(

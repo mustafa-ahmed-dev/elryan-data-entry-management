@@ -39,7 +39,6 @@ export interface FilterValues {
   entryTypeId?: number;
   employeeId?: number;
   teamId?: number;
-  qualityStatus?: "all" | "pass" | "issues" | "fail";
   evaluationStatus?: "all" | "evaluated" | "not_evaluated";
 }
 
@@ -66,9 +65,6 @@ export function EntryFilter({
   const [teamId, setTeamId] = useState<number | undefined>(
     currentFilters.teamId
   );
-  const [qualityStatus, setQualityStatus] = useState<string | undefined>(
-    currentFilters.qualityStatus || "all"
-  );
   const [evaluationStatus, setEvaluationStatus] = useState<string | undefined>(
     currentFilters.evaluationStatus || "all"
   );
@@ -76,7 +72,6 @@ export function EntryFilter({
   const [entryTypes, setEntryTypes] = useState<EntryType[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
-  const [loading, setLoading] = useState(false);
 
   const isTeamLeaderOrAdmin =
     userRole === "team_leader" || userRole === "admin";
@@ -89,7 +84,6 @@ export function EntryFilter({
         const response = await fetch("/api/entry-types");
         if (response.ok) {
           const result = await response.json();
-          // Handle both formats: { data: [...] } or [...]
           setEntryTypes(result.data || result || []);
         }
       } catch (error) {
@@ -99,7 +93,7 @@ export function EntryFilter({
     };
 
     fetchEntryTypes();
-  }, []); // Empty dependency array - only runs once on mount
+  }, []);
 
   // Fetch employees when role allows
   useEffect(() => {
@@ -129,7 +123,6 @@ export function EntryFilter({
         const response = await fetch("/api/teams");
         if (response.ok) {
           const result = await response.json();
-          // Handle both formats: { data: [...] } or { teams: [...] }
           setTeams(result.data || result.teams || []);
         }
       } catch (error) {
@@ -148,11 +141,10 @@ export function EntryFilter({
       entryTypeId,
       employeeId,
       teamId,
-      qualityStatus: qualityStatus as any,
       evaluationStatus: evaluationStatus as any,
     };
 
-    // Remove undefined values
+    // Remove undefined values and "all" values
     Object.keys(filters).forEach((key) => {
       if (
         filters[key as keyof FilterValues] === undefined ||
@@ -171,7 +163,6 @@ export function EntryFilter({
     setEntryTypeId(undefined);
     setEmployeeId(undefined);
     setTeamId(undefined);
-    setQualityStatus("all");
     setEvaluationStatus("all");
     onFilterChange({});
     message.info("Filters cleared");
@@ -240,19 +231,11 @@ export function EntryFilter({
                         style={{ width: "100%" }}
                         allowClear
                         showSearch
-                        filterOption={(input, option) =>
-                          (option?.label ?? "")
-                            .toLowerCase()
-                            .includes(input.toLowerCase())
-                        }
-                        options={
-                          Array.isArray(employees)
-                            ? employees.map((emp) => ({
-                                label: `${emp.name} (${emp.email})`,
-                                value: emp.id,
-                              }))
-                            : []
-                        }
+                        optionFilterProp="label"
+                        options={employees.map((emp) => ({
+                          label: `${emp.name} (${emp.email})`,
+                          value: emp.id,
+                        }))}
                       />
                     </Col>
                   )}
@@ -282,23 +265,6 @@ export function EntryFilter({
 
                   <Col xs={24} sm={12} lg={8}>
                     <div style={{ marginBottom: 8 }}>
-                      <strong>Quality Status</strong>
-                    </div>
-                    <Select
-                      value={qualityStatus}
-                      onChange={setQualityStatus}
-                      style={{ width: "100%" }}
-                      options={[
-                        { label: "All", value: "all" },
-                        { label: "All Pass", value: "pass" },
-                        { label: "Has Issues", value: "issues" },
-                        { label: "All Fail", value: "fail" },
-                      ]}
-                    />
-                  </Col>
-
-                  <Col xs={24} sm={12} lg={8}>
-                    <div style={{ marginBottom: 8 }}>
                       <strong>Evaluation Status</strong>
                     </div>
                     <Select
@@ -306,7 +272,7 @@ export function EntryFilter({
                       onChange={setEvaluationStatus}
                       style={{ width: "100%" }}
                       options={[
-                        { label: "All", value: "all" },
+                        { label: "All Entries", value: "all" },
                         { label: "Evaluated", value: "evaluated" },
                         { label: "Not Evaluated", value: "not_evaluated" },
                       ]}
@@ -321,7 +287,6 @@ export function EntryFilter({
                         type="primary"
                         icon={<FilterOutlined />}
                         onClick={handleApplyFilters}
-                        loading={loading}
                       >
                         Apply Filters
                       </Button>

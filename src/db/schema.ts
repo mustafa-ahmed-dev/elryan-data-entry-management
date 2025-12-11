@@ -269,29 +269,27 @@ export const evaluationRules = pgTable("evaluation_rules", {
  * Entries - Data entry records submitted by employees
  * These are the records that get evaluated
  */
+/**
+ * Entries - Simplified data entry records submitted by employees
+ * Contains only: SKU, Entry Type, User, and Timestamp
+ */
 export const entries = pgTable("entries", {
   id: serial("id").primaryKey(),
+
+  // User who created the entry
   employeeId: integer("employee_id")
     .references(() => users.id)
     .notNull(),
+
+  // Type of entry
   entryTypeId: integer("entry_type_id")
     .references(() => entryTypes.id)
     .notNull(),
-  productName: varchar("product_name", { length: 500 }).notNull(),
-  productDescription: text("product_description"),
 
-  // Quality flags (set by evaluator)
-  followsNamingConvention: boolean("follows_naming_convention")
-    .default(true)
-    .notNull(),
-  followsSpecificationOrder: boolean("follows_specification_order")
-    .default(true)
-    .notNull(),
-  containsUnwantedKeywords: boolean("contains_unwanted_keywords")
-    .default(false)
-    .notNull(),
+  // SKU field
+  sku: varchar("sku", { length: 100 }).notNull(),
 
-  // Timestamp for productivity tracking
+  // Timestamp
   entryTime: timestamp("entry_time").defaultNow().notNull(),
 });
 

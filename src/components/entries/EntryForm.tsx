@@ -1,107 +1,68 @@
+/**
+ * Entry Form Component
+ *
+ * Simplified form for creating entries with only SKU and Entry Type
+ */
+
 "use client";
 
 import { useState, useEffect } from "react";
 import {
   Form,
   Input,
-  Select,
-  Switch,
-  DatePicker,
   Button,
-  message,
   Card,
   Space,
+  message,
+  Select,
+  DatePicker,
   Row,
   Col,
 } from "antd";
 import { SaveOutlined, ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 
-const { TextArea } = Input;
-
-interface EntryType {
-  id: number;
-  name: string;
-}
-
 interface EntryFormProps {
+  entryTypes: Array<{ id: number; name: string }>;
+  onSubmit: (values: any) => Promise<void>;
   employeeId: number;
-  onSuccess?: () => void;
 }
 
-export function EntryForm({ employeeId, onSuccess }: EntryFormProps) {
+export function EntryForm({
+  entryTypes,
+  onSubmit,
+  employeeId,
+}: EntryFormProps) {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
-  const [entryTypes, setEntryTypes] = useState<EntryType[]>([]);
-  const [loadingTypes, setLoadingTypes] = useState(true);
 
-  // Fetch entry types
+  // Set initial values
   useEffect(() => {
-    fetchEntryTypes();
-  }, []);
+    form.setFieldsValue({
+      entryTime: dayjs(),
+    });
+  }, [form]);
 
-  const fetchEntryTypes = async () => {
-    try {
-      setLoadingTypes(true);
-      const response = await fetch("/api/entry-types");
-      if (!response.ok) throw new Error("Failed to fetch entry types");
-      const result = await response.json();
-      // Handle both formats: { data: [...] } or [...]
-      setEntryTypes(result.data || result);
-    } catch (error) {
-      message.error("Failed to load entry types");
-      console.error(error);
-    } finally {
-      setLoadingTypes(false);
-    }
-  };
-
-  const onFinish = async (values: any) => {
+  const handleSubmit = async (values: any) => {
     try {
       setLoading(true);
 
-      const entryData = {
+      const payload = {
         employeeId,
         entryTypeId: values.entryTypeId,
-        productName: values.productName,
-        productDescription: values.productDescription,
-        followsNamingConvention: values.followsNamingConvention ?? true,
-        followsSpecificationOrder: values.followsSpecificationOrder ?? true,
-        containsUnwantedKeywords: values.containsUnwantedKeywords ?? false,
-        entryTime: values.entryTime
-          ? values.entryTime.toISOString()
-          : new Date().toISOString(),
+        sku: values.sku.trim(),
+        entryTime: values.entryTime ? values.entryTime.toDate() : new Date(),
       };
 
-      const response = await fetch("/api/entries", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(entryData),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to create entry");
-      }
-
+      await onSubmit(payload);
       message.success("Entry created successfully!");
       form.resetFields();
-      // Reset to default values
       form.setFieldsValue({
-        followsNamingConvention: true,
-        followsSpecificationOrder: true,
-        containsUnwantedKeywords: false,
         entryTime: dayjs(),
       });
-
-      if (onSuccess) {
-        onSuccess();
-      }
-    } catch (error: any) {
-      message.error(error.message || "Failed to create entry");
-      console.error(error);
+    } catch (error) {
+      console.error("Form submission error:", error);
+      message.error("Failed to create entry. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -110,55 +71,62 @@ export function EntryForm({ employeeId, onSuccess }: EntryFormProps) {
   const handleReset = () => {
     form.resetFields();
     form.setFieldsValue({
-      followsNamingConvention: true,
-      followsSpecificationOrder: true,
-      containsUnwantedKeywords: false,
       entryTime: dayjs(),
     });
   };
 
   return (
-    <Card>
+    <Card title="Create New Entry" style={{ maxWidth: 800, margin: "0 auto" }}>
       <Form
         form={form}
         layout="vertical"
-        onFinish={onFinish}
-        initialValues={{
-          followsNamingConvention: true,
-          followsSpecificationOrder: true,
-          containsUnwantedKeywords: false,
-          entryTime: dayjs(),
-        }}
+        onFinish={handleSubmit}
+        autoComplete="off"
       >
         <Row gutter={16}>
-          <Col xs={24} md={12}>
+          <Col xs={24} sm={12}>
             <Form.Item
-              label="Product Name"
-              name="productName"
+              label="SKU"
+              name="sku"
               rules={[
-                { required: true, message: "Please enter product name" },
+                { required: true, message: "Please enter SKU" },
                 {
-                  max: 200,
-                  message: "Product name must be less than 200 characters",
+                  min: 1,
+                  message: "SKU must be at least 1 character",
+                },
+                {
+                  max: 100,
+                  message: "SKU must be less than 100 characters",
+                },
+                {
+                  pattern: /^[a-zA-Z0-9-_]+$/,
+                  message:
+                    "SKU can only contain letters, numbers, hyphens, and underscores",
                 },
               ]}
             >
-              <Input placeholder="Enter product name" size="large" />
+              <Input
+                placeholder="Enter SKU (e.g., PRD-12345)"
+                size="large"
+                maxLength={100}
+              />
             </Form.Item>
           </Col>
 
-          <Col xs={24} md={12}>
+          <Col xs={24} sm={12}>
             <Form.Item
               label="Entry Type"
               name="entryTypeId"
-              rules={[{ required: true, message: "Please select entry type" }]}
+              rules={[
+                { required: true, message: "Please select an entry type" },
+              ]}
             >
               <Select
                 placeholder="Select entry type"
                 size="large"
-                loading={loadingTypes}
+                showSearch={{ optionFilterProp: "label" }}
                 options={
-                  Array.isArray(entryTypes)
+                  entryTypes
                     ? entryTypes.map((type) => ({
                         label: type.name,
                         value: type.id,
@@ -170,25 +138,6 @@ export function EntryForm({ employeeId, onSuccess }: EntryFormProps) {
           </Col>
         </Row>
 
-        <Form.Item
-          label="Product Description"
-          name="productDescription"
-          rules={[
-            { required: true, message: "Please enter product description" },
-            {
-              max: 1000,
-              message: "Description must be less than 1000 characters",
-            },
-          ]}
-        >
-          <TextArea
-            placeholder="Enter product description"
-            rows={4}
-            showCount
-            maxLength={1000}
-          />
-        </Form.Item>
-
         <Form.Item label="Entry Time" name="entryTime">
           <DatePicker
             showTime
@@ -197,38 +146,6 @@ export function EntryForm({ employeeId, onSuccess }: EntryFormProps) {
             style={{ width: "100%" }}
           />
         </Form.Item>
-
-        <Card title="Quality Checks" size="small" style={{ marginBottom: 24 }}>
-          <Space direction="vertical" style={{ width: "100%" }} size="middle">
-            <Form.Item
-              label="Follows Naming Convention"
-              name="followsNamingConvention"
-              valuePropName="checked"
-              style={{ marginBottom: 0 }}
-            >
-              <Switch />
-            </Form.Item>
-
-            <Form.Item
-              label="Follows Specification Order"
-              name="followsSpecificationOrder"
-              valuePropName="checked"
-              style={{ marginBottom: 0 }}
-            >
-              <Switch />
-            </Form.Item>
-
-            <Form.Item
-              label="Contains Unwanted Keywords"
-              name="containsUnwantedKeywords"
-              valuePropName="checked"
-              style={{ marginBottom: 0 }}
-              tooltip="Toggle ON if product contains unwanted keywords (this is a negative check)"
-            >
-              <Switch />
-            </Form.Item>
-          </Space>
-        </Card>
 
         <Form.Item>
           <Space>

@@ -1,12 +1,16 @@
-/**
- * Evaluation Table Component
- *
- * Displays evaluations in a table with scores and actions
- */
-
 "use client";
 
-import { Table, Space, Button, Tag, Tooltip, Popconfirm, Progress } from "antd";
+import { useState } from "react";
+import {
+  Table,
+  Space,
+  Button,
+  Tag,
+  Tooltip,
+  Popconfirm,
+  Progress,
+  Modal,
+} from "antd";
 import {
   EditOutlined,
   DeleteOutlined,
@@ -38,13 +42,13 @@ interface Evaluation {
 interface EvaluationTableProps {
   evaluations: Evaluation[];
   loading: boolean;
-  pagination: TablePaginationConfig;
-  onView: (evaluation: Evaluation) => void;
+  pagination?: TablePaginationConfig;
+  onView?: (evaluation: Evaluation) => void;
   onEdit?: (evaluation: Evaluation) => void;
   onDelete?: (evaluationId: number) => void;
-  onChange: (page: number, pageSize: number) => void;
-  canEdit: boolean;
-  canDelete: boolean;
+  onChange?: (page: number, pageSize: number) => void;
+  canEdit?: boolean;
+  canDelete?: boolean;
 }
 
 export function EvaluationTable({
@@ -55,9 +59,23 @@ export function EvaluationTable({
   onEdit,
   onDelete,
   onChange,
-  canEdit,
-  canDelete,
+  canEdit = false,
+  canDelete = false,
 }: EvaluationTableProps) {
+  const [selectedEvaluation, setSelectedEvaluation] =
+    useState<Evaluation | null>(null);
+  const [detailVisible, setDetailVisible] = useState(false);
+
+  const handleView = (evaluation: Evaluation) => {
+    if (onView) {
+      onView(evaluation);
+    } else {
+      // Default behavior: show detail modal
+      setSelectedEvaluation(evaluation);
+      setDetailVisible(true);
+    }
+  };
+
   const columns: ColumnsType<Evaluation> = [
     {
       title: "Entry ID",
@@ -161,7 +179,7 @@ export function EvaluationTable({
             <Button
               type="text"
               icon={<EyeOutlined />}
-              onClick={() => onView(record)}
+              onClick={() => handleView(record)}
             />
           </Tooltip>
           {canEdit && onEdit && (
@@ -192,18 +210,90 @@ export function EvaluationTable({
   ];
 
   return (
-    <Table
-      columns={columns}
-      dataSource={evaluations}
-      loading={loading}
-      pagination={{
-        ...pagination,
-        showSizeChanger: true,
-        showTotal: (total) => `Total ${total} evaluations`,
-        onChange: onChange,
-      }}
-      rowKey="id"
-      scroll={{ x: 1000 }}
-    />
+    <>
+      <Table
+        columns={columns}
+        dataSource={evaluations}
+        loading={loading}
+        pagination={
+          pagination
+            ? {
+                ...pagination,
+                showSizeChanger: true,
+                showTotal: (total) => `Total ${total} evaluations`,
+                onChange: onChange,
+              }
+            : false
+        }
+        rowKey="id"
+        scroll={{ x: 1000 }}
+      />
+
+      {/* Default Detail Modal */}
+      <Modal
+        title={`Evaluation Details - Entry #${selectedEvaluation?.entryId}`}
+        open={detailVisible}
+        onCancel={() => setDetailVisible(false)}
+        footer={null}
+        width={600}
+      >
+        {selectedEvaluation && (
+          <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+            <div>
+              <strong>Employee:</strong> {selectedEvaluation.employeeName}
+            </div>
+            <div>
+              <strong>Score:</strong>{" "}
+              <Tag
+                color={
+                  selectedEvaluation.totalScore >= 80
+                    ? "success"
+                    : selectedEvaluation.totalScore >= 60
+                    ? "warning"
+                    : "error"
+                }
+              >
+                {selectedEvaluation.totalScore} / 100
+              </Tag>
+            </div>
+            <div>
+              <strong>Violations:</strong>{" "}
+              {selectedEvaluation.violations.length === 0 ? (
+                <Tag color="success">No violations</Tag>
+              ) : (
+                <Space direction="vertical" size="small">
+                  {selectedEvaluation.violations.map((violation, index) => (
+                    <Tag key={index} color="warning">
+                      {violation.ruleName} (-{violation.deduction} points)
+                    </Tag>
+                  ))}
+                </Space>
+              )}
+            </div>
+            {selectedEvaluation.comments && (
+              <div>
+                <strong>Comments:</strong>
+                <p
+                  style={{
+                    marginTop: 8,
+                    padding: 12,
+                    background: "#f5f5f5",
+                    borderRadius: 4,
+                  }}
+                >
+                  {selectedEvaluation.comments}
+                </p>
+              </div>
+            )}
+            <div>
+              <strong>Evaluated At:</strong>{" "}
+              {dayjs(selectedEvaluation.evaluatedAt).format(
+                "MMMM D, YYYY h:mm A"
+              )}
+            </div>
+          </Space>
+        )}
+      </Modal>
+    </>
   );
 }

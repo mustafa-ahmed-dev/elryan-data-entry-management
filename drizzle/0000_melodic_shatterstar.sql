@@ -11,11 +11,7 @@ CREATE TABLE "entries" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"employee_id" integer NOT NULL,
 	"entry_type_id" integer NOT NULL,
-	"product_name" varchar(500) NOT NULL,
-	"product_description" text,
-	"follows_naming_convention" boolean DEFAULT true NOT NULL,
-	"follows_specification_order" boolean DEFAULT true NOT NULL,
-	"contains_unwanted_keywords" boolean DEFAULT false NOT NULL,
+	"sku" varchar(100) NOT NULL,
 	"entry_time" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint

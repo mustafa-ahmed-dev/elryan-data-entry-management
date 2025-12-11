@@ -1,9 +1,3 @@
-/**
- * Evaluation Rules API Routes - WITH ENHANCED ERROR HANDLING
- * GET /api/rules - List rules (optionally filter by rule set)
- * POST /api/rules - Create new rule
- */
-
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
@@ -17,18 +11,8 @@ import {
   getRequestContext,
 } from "@/lib/api/errors";
 
-// Valid rule types
-const VALID_RULE_TYPES = [
-  "naming",
-  "specification",
-  "keyword",
-  "completeness",
-  "accuracy",
-] as const;
-
-// GET /api/rules - List rules
+// GET /api/rules - Get all rules or filter by rule set
 export const GET = withErrorHandling(async (request: NextRequest) => {
-  // Get context FIRST
   const context = await getRequestContext(request);
 
   const session = await getServerSession(authOptions);
@@ -36,7 +20,6 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
     return ApiErrors.unauthorized(context);
   }
 
-  // Add user info to context
   context.userId = session.user.id;
   context.userEmail = session.user.email;
 
@@ -45,14 +28,12 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
     return ApiErrors.insufficientPermissions(context, "evaluations:read");
   }
 
-  // Get query parameters
-  const searchParams = request.nextUrl.searchParams;
+  const { searchParams } = new URL(request.url);
   const ruleSetId = searchParams.get("ruleSetId");
 
   let rules;
 
   if (ruleSetId) {
-    // Validate ruleSetId
     const parsedRuleSetId = parseInt(ruleSetId);
     if (isNaN(parsedRuleSetId)) {
       return ApiErrors.invalidInput(
@@ -91,7 +72,6 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
 
 // POST /api/rules - Create new rule
 export const POST = withErrorHandling(async (request: NextRequest) => {
-  // Get context FIRST
   const context = await getRequestContext(request);
 
   const session = await getServerSession(authOptions);
@@ -99,7 +79,6 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     return ApiErrors.unauthorized(context);
   }
 
-  // Add user info to context
   context.userId = session.user.id;
   context.userEmail = session.user.email;
 
@@ -124,8 +103,8 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     return ApiErrors.missingField(context, "ruleName");
   }
 
-  if (!body.ruleType) {
-    return ApiErrors.missingField(context, "ruleType");
+  if (!body.ruleTypeId) {
+    return ApiErrors.missingField(context, "ruleTypeId");
   }
 
   if (body.deductionPoints === undefined) {
@@ -142,6 +121,16 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     );
   }
 
+  // Validate ruleTypeId
+  const ruleTypeId = parseInt(body.ruleTypeId);
+  if (isNaN(ruleTypeId)) {
+    return ApiErrors.invalidInput(
+      context,
+      "Rule type ID must be a number",
+      "ruleTypeId"
+    );
+  }
+
   // Validate ruleName
   if (typeof body.ruleName !== "string" || body.ruleName.trim().length === 0) {
     return ApiErrors.invalidInput(
@@ -151,10 +140,10 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     );
   }
 
-  if (body.ruleName.length > 100) {
+  if (body.ruleName.length > 200) {
     return ApiErrors.invalidInput(
       context,
-      "Rule name must be 100 characters or less",
+      "Rule name must be 200 characters or less",
       "ruleName"
     );
   }
@@ -177,24 +166,15 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     );
   }
 
-  // Validate rule type
-  if (!VALID_RULE_TYPES.includes(body.ruleType)) {
-    return ApiErrors.invalidInput(
-      context,
-      `Invalid rule type. Must be one of: ${VALID_RULE_TYPES.join(", ")}`,
-      "ruleType"
-    );
-  }
-
   // Create rule
   const [rule] = await db
     .insert(evaluationRules)
     .values({
       ruleSetId,
-      ruleName: body.ruleName,
-      ruleType: body.ruleType,
+      ruleName: body.ruleName.trim(),
+      ruleTypeId,
       deductionPoints,
-      description: body.description || null,
+      description: body.description?.trim() || null,
     })
     .returning();
 
