@@ -79,7 +79,6 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
       }
     );
   } catch (error) {
-    console.error("Error fetching security settings:", error);
     return ApiErrors.internalError(
       context,
       "Failed to fetch security settings"
@@ -144,7 +143,6 @@ export const PATCH = withErrorHandling(async (request: NextRequest) => {
       }
     );
   } catch (error) {
-    console.error("Error updating security settings:", error);
     return ApiErrors.internalError(
       context,
       "Failed to update security settings"

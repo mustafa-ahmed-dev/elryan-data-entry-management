@@ -58,7 +58,6 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
       }
     );
   } catch (error) {
-    console.error("Error fetching password policy:", error);
     return ApiErrors.internalError(context, "Failed to fetch password policy");
   }
 });
@@ -120,7 +119,6 @@ export const PATCH = withErrorHandling(async (request: NextRequest) => {
       }
     );
   } catch (error) {
-    console.error("Error updating password policy:", error);
     return ApiErrors.internalError(context, "Failed to update password policy");
   }
 });

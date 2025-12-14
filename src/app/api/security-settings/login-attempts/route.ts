@@ -92,7 +92,6 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
       }
     );
   } catch (error) {
-    console.error("Error fetching login attempts:", error);
     return ApiErrors.internalError(context, "Failed to fetch login attempts");
   }
 });

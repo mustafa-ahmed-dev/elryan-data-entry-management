@@ -15,7 +15,7 @@ export * from "./auth";
 // export * from "./report";
 
 // Schedule Types
-// export * from "./schedule";
+export * from "./schedule";
 
 // Team Types
 // export * from "./team";

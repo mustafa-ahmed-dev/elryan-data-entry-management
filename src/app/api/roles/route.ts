@@ -30,7 +30,6 @@ export async function GET(request: NextRequest) {
       data: rolesList,
     });
   } catch (error) {
-    console.error("Error fetching roles:", error);
     return NextResponse.json(
       { error: "Failed to fetch roles" },
       { status: 500 }

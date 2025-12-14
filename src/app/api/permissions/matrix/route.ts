@@ -71,7 +71,6 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
       }
     );
   } catch (error) {
-    console.error("Error fetching permission matrix:", error);
     return ApiErrors.internalError(
       context,
       "Failed to fetch permission matrix"
@@ -148,7 +147,6 @@ export const PATCH = withErrorHandling(async (request: NextRequest) => {
       }
     );
   } catch (error) {
-    console.error("Error updating permissions:", error);
     return ApiErrors.internalError(context, "Failed to update permissions");
   }
 });

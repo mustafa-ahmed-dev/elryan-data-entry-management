@@ -9,10 +9,10 @@ import {
   UnorderedListOutlined,
   CheckCircleOutlined,
 } from "@ant-design/icons";
-import { MainLayout } from "@/components/layout/MainLayout";
-import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { MainLayout } from "@/components/layout";
+import { ProtectedRoute } from "@/components/auth";
 import { EntryForm, EntryTable, EntryFilter } from "@/components/entries";
-import type { FilterValues } from "@/components/entries/EntryFilter";
+import type { FilterValues } from "@/components/entries";
 
 interface User {
   id: number;

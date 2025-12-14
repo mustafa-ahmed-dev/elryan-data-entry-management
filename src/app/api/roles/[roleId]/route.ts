@@ -78,7 +78,6 @@ export const GET = withErrorHandling(
         }
       );
     } catch (error) {
-      console.error("Error fetching role permissions:", error);
       return ApiErrors.internalError(
         context,
         "Failed to fetch role permissions"
@@ -162,7 +161,6 @@ export const PATCH = withErrorHandling(
         }
       );
     } catch (error) {
-      console.error("Error updating role permissions:", error);
       return ApiErrors.internalError(
         context,
         "Failed to update role permissions"

@@ -247,7 +247,7 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
           </Button>
         }
         style={{ height: "100%" }}
-        bodyStyle={{ padding: 0, height: "calc(100% - 57px)" }}
+        styles={{ body: { padding: 0, height: "calc(100% - 57px)" } }}
       >
         {/* Filters */}
         <div style={{ padding: "16px", borderBottom: "1px solid #f0f0f0" }}>
@@ -266,7 +266,7 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
                 ),
                 children: (
                   <Space
-                    direction="vertical"
+                    orientation="vertical"
                     style={{ width: "100%" }}
                     size="middle"
                   >
@@ -366,7 +366,7 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
                       )
                     }
                     title={
-                      <Space direction="vertical" size={0}>
+                      <Space orientation="vertical" size={0}>
                         <Space>
                           <BarcodeOutlined />
                           <Text strong>{entry.sku}</Text>
@@ -378,7 +378,7 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
                     }
                     description={
                       <Space
-                        direction="vertical"
+                        orientation="vertical"
                         size={2}
                         style={{ width: "100%" }}
                       >

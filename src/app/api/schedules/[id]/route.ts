@@ -1,4 +1,3 @@
-// src/app/api/schedules/[id]/route.ts
 /**
  * Schedule Detail API Routes
  * GET /api/schedules/[id] - Get schedule details
@@ -22,13 +21,14 @@ import {
 } from "@/lib/api/errors";
 
 interface RouteParams {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 // GET /api/schedules/[id]
 export const GET = withErrorHandling(
-  async (request: NextRequest, { params }: RouteParams) => {
+  async (request: NextRequest, props: RouteParams) => {
     const context = await getRequestContext(request);
+    const params = await props.params;
 
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -163,7 +163,11 @@ export const PATCH = withErrorHandling(
       return ApiErrors.invalidInput(context, "No valid fields to update");
     }
 
-    const updatedSchedule = await updateSchedule(scheduleId, updateData);
+    const updatedSchedule = await updateSchedule(
+      scheduleId,
+      updateData,
+      session.user.id
+    );
 
     return NextResponse.json(
       {

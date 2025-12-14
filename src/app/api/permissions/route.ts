@@ -38,8 +38,6 @@ export async function GET(request: NextRequest) {
       teamId: userPermissions.teamId,
     });
   } catch (error) {
-    console.error("Error fetching permissions:", error);
-
     return NextResponse.json(
       { error: "Failed to fetch permissions" },
       { status: 500 }

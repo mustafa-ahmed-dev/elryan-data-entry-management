@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { checkPermission } from "@/db/utils/permissions";
-import { approveSchedule } from "@/db/utils/schedules";
+import { rejectSchedule } from "@/db/utils/schedules";
 import {
   ApiErrors,
   withErrorHandling,
@@ -26,13 +26,13 @@ export const POST = withErrorHandling(
     context.userId = session.user.id;
     context.userEmail = session.user.email;
 
-    const canApprove = await checkPermission(
+    const canReject = await checkPermission(
       session.user.id,
       "schedules",
-      "approve"
+      "reject"
     );
-    if (!canApprove) {
-      return ApiErrors.insufficientPermissions(context, "schedules:approve");
+    if (!canReject) {
+      return ApiErrors.insufficientPermissions(context, "schedules:reject");
     }
 
     const scheduleId = parseInt(id);
@@ -40,14 +40,21 @@ export const POST = withErrorHandling(
       return ApiErrors.invalidId(context, "Schedule");
     }
 
+    const body = await request.json();
+    const { reason } = body;
+
     try {
-      const schedule = await approveSchedule(scheduleId, session.user.id);
+      const schedule = await rejectSchedule(
+        scheduleId,
+        session.user.id,
+        reason
+      );
 
       return NextResponse.json(
         {
           success: true,
           data: schedule,
-          message: "Schedule approved successfully",
+          message: "Schedule rejected",
         },
         {
           headers: {

@@ -1,150 +1,122 @@
-/**
- * useSchedules Hook
- *
- * Manages schedules data fetching and mutations
- */
-
-"use client";
-
-import useSWR from "swr";
-import { useState } from "react";
-
-interface ScheduleFilters {
-  userId?: number;
-  teamId?: number;
-  status?: "pending_approval" | "approved" | "rejected";
-  weekStartDate?: string;
-  page?: number;
-  pageSize?: number;
-  pending?: boolean;
-}
-
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+import { useState, useEffect, useCallback } from "react";
+import { message } from "antd";
+import type { Schedule, ScheduleFilters, ScheduleStats } from "@/lib/types";
 
 export function useSchedules(filters?: ScheduleFilters) {
-  const [isCreating, setIsCreating] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isApproving, setIsApproving] = useState(false);
-
-  // Build query string
-  const params = new URLSearchParams();
-  if (filters?.userId) params.append("userId", filters.userId.toString());
-  if (filters?.teamId) params.append("teamId", filters.teamId.toString());
-  if (filters?.status) params.append("status", filters.status);
-  if (filters?.weekStartDate)
-    params.append("weekStartDate", filters.weekStartDate);
-  if (filters?.page) params.append("page", filters.page.toString());
-  if (filters?.pageSize) params.append("pageSize", filters.pageSize.toString());
-  if (filters?.pending) params.append("pending", "true");
-
-  const queryString = params.toString();
-  const url = `/api/schedules${queryString ? `?${queryString}` : ""}`;
-
-  // Fetch schedules with SWR
-  const { data, error, isLoading, mutate } = useSWR(url, fetcher, {
-    revalidateOnFocus: false,
-    dedupingInterval: 5000,
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [stats, setStats] = useState<ScheduleStats>({
+    total: 0,
+    pending: 0,
+    approved: 0,
+    rejected: 0,
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Create schedule
-  const createSchedule = async (scheduleData: any) => {
+  const fetchSchedules = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      setIsCreating(true);
-      const response = await fetch("/api/schedules", {
+      const params = new URLSearchParams();
+      if (filters?.status) params.append("status", filters.status);
+      if (filters?.userId) params.append("userId", filters.userId.toString());
+      if (filters?.weekStartDate)
+        params.append("weekStartDate", filters.weekStartDate);
+      if (filters?.weekEndDate)
+        params.append("weekEndDate", filters.weekEndDate);
+
+      const response = await fetch(`/api/schedules?${params.toString()}`);
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.error || `Failed to fetch schedules (${response.status})`
+        );
+      }
+
+      if (result.success) {
+        setSchedules(result.data || []);
+        setStats(
+          result.stats || { total: 0, pending: 0, approved: 0, rejected: 0 }
+        );
+      }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to fetch schedules";
+      setError(errorMessage);
+      message.error(errorMessage);
+      setSchedules([]);
+      setStats({ total: 0, pending: 0, approved: 0, rejected: 0 });
+    } finally {
+      setLoading(false);
+    }
+  }, [filters]);
+
+  useEffect(() => {
+    fetchSchedules();
+  }, [fetchSchedules]);
+
+  const createBulkSchedules = async (schedules: any[]) => {
+    try {
+      console.log("Creating bulk schedules:", schedules);
+
+      const response = await fetch("/api/schedules/bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(scheduleData),
+        body: JSON.stringify(schedules),
       });
 
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || "Failed to create schedule");
+        throw new Error(result.error || "Failed to create schedules");
       }
 
-      await mutate();
-
-      return { success: true, data: result.data };
-    } catch (error) {
-      return {
-        success: false,
-        error:
-          error instanceof Error ? error.message : "Failed to create schedule",
-      };
-    } finally {
-      setIsCreating(false);
+      message.success(result.message || "Schedules created successfully");
+      await fetchSchedules();
+      return result.data;
+    } catch (err) {
+      console.error("Error creating bulk schedules:", err);
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to create schedules";
+      message.error(errorMessage);
+      throw err;
     }
   };
 
-  // Update schedule
-  const updateSchedule = async (id: number, scheduleData: any) => {
-    try {
-      setIsUpdating(true);
-      const response = await fetch(`/api/schedules/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(scheduleData),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || "Failed to update schedule");
-      }
-
-      await mutate();
-
-      return { success: true, data: result.data };
-    } catch (error) {
-      return {
-        success: false,
-        error:
-          error instanceof Error ? error.message : "Failed to update schedule",
-      };
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  // Approve schedule
   const approveSchedule = async (id: number) => {
     try {
-      setIsApproving(true);
+      console.log("Approving schedule:", id);
+
       const response = await fetch(`/api/schedules/${id}/approve`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "approve" }),
       });
 
+      console.log("Approve response status:", response.status);
       const result = await response.json();
+      console.log("Approve response data:", result);
 
       if (!response.ok) {
         throw new Error(result.error || "Failed to approve schedule");
       }
 
-      await mutate();
-
-      return { success: true, data: result.data };
-    } catch (error) {
-      return {
-        success: false,
-        error:
-          error instanceof Error ? error.message : "Failed to approve schedule",
-      };
-    } finally {
-      setIsApproving(false);
+      message.success(result.message || "Schedule approved successfully");
+      await fetchSchedules();
+    } catch (err) {
+      console.error("Error approving schedule:", err);
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to approve schedule";
+      message.error(errorMessage);
+      throw err;
     }
   };
 
-  // Reject schedule
-  const rejectSchedule = async (id: number, reason: string) => {
+  const rejectSchedule = async (id: number, reason?: string) => {
     try {
-      setIsApproving(true);
-      const response = await fetch(`/api/schedules/${id}/approve`, {
+      const response = await fetch(`/api/schedules/${id}/reject`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "reject", reason }),
+        body: JSON.stringify({ reason }),
       });
 
       const result = await response.json();
@@ -153,62 +125,24 @@ export function useSchedules(filters?: ScheduleFilters) {
         throw new Error(result.error || "Failed to reject schedule");
       }
 
-      await mutate();
-
-      return { success: true, data: result.data };
-    } catch (error) {
-      return {
-        success: false,
-        error:
-          error instanceof Error ? error.message : "Failed to reject schedule",
-      };
-    } finally {
-      setIsApproving(false);
-    }
-  };
-
-  // Delete schedule
-  const deleteSchedule = async (id: number) => {
-    try {
-      setIsDeleting(true);
-      const response = await fetch(`/api/schedules/${id}`, {
-        method: "DELETE",
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || "Failed to delete schedule");
-      }
-
-      await mutate();
-
-      return { success: true };
-    } catch (error) {
-      return {
-        success: false,
-        error:
-          error instanceof Error ? error.message : "Failed to delete schedule",
-      };
-    } finally {
-      setIsDeleting(false);
+      message.success(result.message || "Schedule rejected");
+      await fetchSchedules();
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to reject schedule";
+      message.error(errorMessage);
+      throw err;
     }
   };
 
   return {
-    schedules: data?.data || [],
-    pagination: data?.pagination,
-    isLoading,
+    schedules,
+    stats,
+    loading,
     error,
-    createSchedule,
-    updateSchedule,
+    refetch: fetchSchedules,
+    createBulkSchedules,
     approveSchedule,
     rejectSchedule,
-    deleteSchedule,
-    isCreating,
-    isUpdating,
-    isDeleting,
-    isApproving,
-    refresh: mutate,
   };
 }

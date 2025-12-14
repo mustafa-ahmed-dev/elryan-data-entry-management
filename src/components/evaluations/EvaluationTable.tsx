@@ -243,7 +243,7 @@ export function EvaluationTable({
         width={600}
       >
         {selectedEvaluation && (
-          <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+          <Space orientation="vertical" size="middle" style={{ width: "100%" }}>
             <div>
               <strong>Employee:</strong> {selectedEvaluation.employeeName}
             </div>
@@ -266,7 +266,7 @@ export function EvaluationTable({
               {selectedEvaluation.violations.length === 0 ? (
                 <Tag color="success">No violations</Tag>
               ) : (
-                <Space direction="vertical" size="small">
+                <Space orientation="vertical" size="small">
                   {selectedEvaluation.violations.map((violation, index) => (
                     <Tag key={index} color="warning">
                       {violation.ruleName} (-{violation.deduction} points)

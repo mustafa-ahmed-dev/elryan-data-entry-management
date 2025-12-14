@@ -488,7 +488,7 @@ export const qualityEvaluationsRelations = relations(
 );
 
 // ============================================================================
-// TYPESCRIPT TYPES - Add to the end of src/db/schema.ts
+// TYPESCRIPT TYPES
 // ============================================================================
 
 // Reference Tables

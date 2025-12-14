@@ -58,7 +58,6 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
       }
     );
   } catch (error) {
-    console.error("Error fetching permission statistics:", error);
     return ApiErrors.internalError(
       context,
       "Failed to fetch permission statistics"

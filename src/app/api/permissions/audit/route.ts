@@ -88,7 +88,6 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
       }
     );
   } catch (error) {
-    console.error("Error fetching audit logs:", error);
     return ApiErrors.internalError(context, "Failed to fetch audit logs");
   }
 });
