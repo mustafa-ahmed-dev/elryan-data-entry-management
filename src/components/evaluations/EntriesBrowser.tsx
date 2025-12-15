@@ -344,7 +344,9 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
                     cursor: "pointer",
                     padding: "12px 16px",
                     backgroundColor:
-                      selectedEntryId === entry.id ? "#e6f7ff" : "transparent",
+                      selectedEntryId === entry.id
+                        ? "#0073f7ff"
+                        : "transparent",
                     borderLeft:
                       selectedEntryId === entry.id
                         ? "3px solid #1890ff"
@@ -406,7 +408,7 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
       <style>
         {`
           .entry-list-item:hover {
-            background-color: #f5f5f5 !important;
+            background-color: #384cffff !important;
           }
         `}
       </style>

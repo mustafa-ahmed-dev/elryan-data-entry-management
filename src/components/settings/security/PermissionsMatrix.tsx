@@ -280,7 +280,7 @@ export function PermissionsMatrix() {
 
       {/* Permission Scope Legend */}
       {selectedRole && (
-        <Card size="small" style={{ marginBottom: 24, background: "#fafafa" }}>
+        <Card size="small" style={{ marginBottom: 24 }}>
           <Space wrap>
             <Text strong>Permission Scopes:</Text>
             <Tag color="blue">Own - User&apos;s own data only</Tag>
@@ -419,7 +419,6 @@ export function PermissionsMatrix() {
           style={{
             textAlign: "center",
             padding: 60,
-            background: "#fafafa",
           }}
         >
           <Space orientation="vertical" size="large">

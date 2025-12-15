@@ -21,7 +21,7 @@ export default async function EntriesPage() {
         id: session.user.id,
         name: session.user.name || session.user.fullName,
         email: session.user.email,
-        role: session.user.role,
+        role: session.user.roleName,
       }}
     />
   );

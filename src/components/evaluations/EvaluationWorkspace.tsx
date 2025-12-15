@@ -217,7 +217,7 @@ export const EvaluationWorkspace: React.FC<EvaluationWorkspaceProps> = ({
 
   return (
     <Layout style={{ background: "transparent" }}>
-      <Sider width={400} style={{ background: "#fff", padding: "16px" }}>
+      <Sider width={400} style={{ padding: "16px" }}>
         <div style={{ marginBottom: 16 }}>
           <Space orientation="vertical" size={0} style={{ width: "100%" }}>
             <Space style={{ width: "100%", justifyContent: "space-between" }}>
@@ -292,7 +292,7 @@ export const EvaluationWorkspace: React.FC<EvaluationWorkspaceProps> = ({
         </div>
       </Sider>
 
-      <Content style={{ padding: "16px", background: "#fff", marginLeft: 16 }}>
+      <Content style={{ padding: "16px", marginLeft: 16 }}>
         {!isEvaluating ? (
           <div
             style={{
@@ -383,13 +383,13 @@ export const EvaluationWorkspace: React.FC<EvaluationWorkspaceProps> = ({
                     minHeight: 100,
                     padding: 8,
                     borderRadius: 4,
-                    border: "1px solid #d9d9d9",
+                    // border: "1px solid #d9d9d9",
                     fontFamily: "inherit",
                   }}
                 />
               </div>
 
-              <Card size="small" style={{ background: "#f0f2f5" }}>
+              <Card size="small">
                 <Space orientation="vertical" size={0}>
                   <Text type="secondary">Calculated Score:</Text>
                   <Title level={2} style={{ margin: 0, color: "#1890ff" }}>

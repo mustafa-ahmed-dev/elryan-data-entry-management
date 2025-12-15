@@ -8,10 +8,16 @@ import {
   PlusOutlined,
   UnorderedListOutlined,
   CheckCircleOutlined,
+  UploadOutlined,
 } from "@ant-design/icons";
 import { MainLayout } from "@/components/layout";
 import { ProtectedRoute } from "@/components/auth";
-import { EntryForm, EntryTable, EntryFilter } from "@/components/entries";
+import {
+  EntryForm,
+  EntryTable,
+  EntryFilter,
+  BulkEntryCSVForm,
+} from "@/components/entries";
 import type { FilterValues } from "@/components/entries";
 
 interface User {
@@ -48,6 +54,7 @@ export function EntriesClient({ user }: EntriesClientProps) {
   const [activeTab, setActiveTab] = useState("1");
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [users, setUsers] = useState<any[]>([]);
   const [statistics, setStatistics] = useState<Statistics>({
     total: 0,
     today: 0,
@@ -69,7 +76,10 @@ export function EntriesClient({ user }: EntriesClientProps) {
 
   useEffect(() => {
     fetchEntryTypes();
+    fetchUsers();
   }, []);
+
+  const canBulkCreate = user.role === "admin" || user.role === "team_leader";
 
   const fetchEntryTypes = async () => {
     try {
@@ -80,6 +90,18 @@ export function EntriesClient({ user }: EntriesClientProps) {
       }
     } catch (error) {
       console.error("Failed to fetch entry types:", error);
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch("/api/users");
+      if (response.ok) {
+        const result = await response.json();
+        setUsers(result.data || result || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch users:", error);
     }
   };
 
@@ -182,6 +204,40 @@ export function EntriesClient({ user }: EntriesClientProps) {
     }
   };
 
+  const handleBulkCreateEntries = async (entries: any[]) => {
+    try {
+      const response = await fetch("/api/entries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(entries), // Array of entries
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        return {
+          success: false,
+          error: result.error || "Failed to create entries",
+        };
+      }
+
+      // Refresh data
+      await fetchEntries();
+      await fetchStatistics();
+
+      return {
+        success: true,
+        message:
+          result.message || `Successfully created ${entries.length} entries`,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || "Failed to create entries",
+      };
+    }
+  };
+
   const handleDeleteEntry = async (id: number) => {
     try {
       const response = await fetch(`/api/entries/${id}`, {
@@ -243,6 +299,25 @@ export function EntriesClient({ user }: EntriesClientProps) {
       ),
     },
   ];
+
+  if (canBulkCreate) {
+    tabItems.push({
+      key: "3",
+      label: (
+        <span>
+          <UploadOutlined />
+          Bulk Upload CSV
+        </span>
+      ),
+      children: (
+        <BulkEntryCSVForm
+          entryTypes={entryTypes}
+          users={users}
+          onSubmit={handleBulkCreateEntries}
+        />
+      ),
+    });
+  }
 
   return (
     <ProtectedRoute
