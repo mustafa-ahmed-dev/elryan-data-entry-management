@@ -9,7 +9,7 @@
 
 import { Layout } from "antd";
 import { Navigation } from "./Navigation";
-import { useEffect, useState } from "react";
+import { useTheme } from "@/contexts/ThemeContext";
 
 const { Sider } = Layout;
 
@@ -19,23 +19,8 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed, onCollapse }: SidebarProps) {
-  const [isDark, setIsDark] = useState(false);
-
-  // Check theme from localStorage
-  useEffect(() => {
-    const checkTheme = () => {
-      const savedTheme = localStorage.getItem("theme");
-      setIsDark(savedTheme === "dark");
-    };
-
-    checkTheme();
-
-    // Listen for theme changes
-    const interval = setInterval(checkTheme, 100);
-    return () => clearInterval(interval);
-  }, []);
-
-  const siderTheme = isDark ? "dark" : "light";
+  const { isDarkMode } = useTheme();
+  const siderTheme = isDarkMode ? "dark" : "light";
 
   return (
     <Sider
@@ -58,7 +43,7 @@ export function Sidebar({ collapsed, onCollapse }: SidebarProps) {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          color: isDark ? "#fff" : "#000",
+          color: isDarkMode ? "#fff" : "#000",
           fontSize: collapsed ? "20px" : "18px",
           fontWeight: "bold",
           padding: "0 16px",

@@ -85,7 +85,7 @@ export function EntriesClient({ user }: EntriesClientProps) {
         setEntryTypes(result.data || result || []);
       }
     } catch (error) {
-      console.error("Failed to fetch entry types:", error);
+      throw error;
     }
   };
 
@@ -154,7 +154,7 @@ export function EntriesClient({ user }: EntriesClientProps) {
         });
       }
     } catch (error) {
-      console.error("Failed to fetch statistics:", error);
+      throw error;
     }
   };
 

@@ -16,6 +16,7 @@ import {
   Spin,
   Tag,
   message,
+  theme,
 } from "antd";
 import {
   SearchOutlined,
@@ -29,6 +30,7 @@ import dayjs, { Dayjs } from "dayjs";
 
 const { Text, Title } = Typography;
 const { RangePicker } = DatePicker;
+const { useToken } = theme;
 
 interface Entry {
   id: number;
@@ -54,6 +56,7 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
   selectedEntryId,
   onSelectEntry,
 }) => {
+  const { token } = useToken();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [filteredEntries, setFilteredEntries] = useState<Entry[]>([]);
   const [entryTypes, setEntryTypes] = useState<EntryType[]>([]);
@@ -227,7 +230,7 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
   };
 
   return (
-    <div style={{ height: "100%" }}>
+    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       <Card
         title={
           <Space>
@@ -246,11 +249,25 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
             Refresh
           </Button>
         }
-        style={{ height: "100%" }}
-        styles={{ body: { padding: 0, height: "calc(100% - 57px)" } }}
+        style={{ height: "100%", display: "flex", flexDirection: "column" }}
+        styles={{
+          body: {
+            padding: 0,
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+          },
+        }}
       >
         {/* Filters */}
-        <div style={{ padding: "16px", borderBottom: "1px solid #f0f0f0" }}>
+        <div
+          style={{
+            padding: "16px",
+            borderBottom: "1px solid #f0f0f0",
+            flexShrink: 0,
+          }}
+        >
           <Collapse
             ghost
             activeKey={filtersCollapsed ? [] : ["1"]}
@@ -266,7 +283,7 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
                 ),
                 children: (
                   <Space
-                    orientation="vertical"
+                    direction="vertical"
                     style={{ width: "100%" }}
                     size="middle"
                   >
@@ -294,7 +311,12 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
                       onChange={setSelectedEmployee}
                       style={{ width: "100%" }}
                       allowClear
-                      showSearch={{ optionFilterProp: "label" }}
+                      showSearch
+                      filterOption={(input, option) =>
+                        (option?.label ?? "")
+                          .toLowerCase()
+                          .includes(input.toLowerCase())
+                      }
                       options={employees.map((emp) => ({
                         label: `${emp.name} (${emp.email})`,
                         value: emp.name,
@@ -317,7 +339,7 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
         </div>
 
         {/* Entries List */}
-        <div style={{ height: "calc(100% - 150px)", overflow: "auto" }}>
+        <div style={{ flex: 1, overflow: "auto" }}>
           {loading && entries.length === 0 ? (
             <div
               style={{
@@ -345,11 +367,11 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
                     padding: "12px 16px",
                     backgroundColor:
                       selectedEntryId === entry.id
-                        ? "#0073f7ff"
+                        ? token.colorPrimaryBg
                         : "transparent",
                     borderLeft:
                       selectedEntryId === entry.id
-                        ? "3px solid #1890ff"
+                        ? `3px solid ${token.colorPrimary}`
                         : "3px solid transparent",
                     transition: "all 0.3s",
                   }}
@@ -368,7 +390,7 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
                       )
                     }
                     title={
-                      <Space orientation="vertical" size={0}>
+                      <Space direction="vertical" size={0}>
                         <Space>
                           <BarcodeOutlined />
                           <Text strong>{entry.sku}</Text>
@@ -380,7 +402,7 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
                     }
                     description={
                       <Space
-                        orientation="vertical"
+                        direction="vertical"
                         size={2}
                         style={{ width: "100%" }}
                       >
@@ -405,13 +427,11 @@ export const EntriesBrowser: React.FC<EntriesBrowserProps> = ({
         </div>
       </Card>
 
-      <style>
-        {`
-          .entry-list-item:hover {
-            background-color: #384cffff !important;
-          }
-        `}
-      </style>
+      <style jsx>{`
+        .entry-list-item:hover {
+          background-color: ${token.colorBgTextHover} !important;
+        }
+      `}</style>
     </div>
   );
 };

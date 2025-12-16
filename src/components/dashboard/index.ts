@@ -1,1 +1,3 @@
-// src/components/dashboard/index.ts
+export { AdminDashboard } from "./AdminDashboard";
+export { TeamLeaderDashboard } from "./TeamLeaderDashboard";
+export { EmployeeDashboard } from "./EmployeeDashboard";

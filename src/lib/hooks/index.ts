@@ -21,3 +21,4 @@ export * from "./useSchedules";
 export * from "./useReports";
 export * from "./useEvaluations";
 export * from "./useRuleTypes";
+export * from "./useDashboard";

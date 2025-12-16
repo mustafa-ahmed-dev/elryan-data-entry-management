@@ -11,6 +11,8 @@ import {
   Divider,
   Button,
   message,
+  theme,
+  Input,
 } from "antd";
 import {
   CheckOutlined,
@@ -23,6 +25,8 @@ import dayjs from "dayjs";
 
 const { Sider, Content } = Layout;
 const { Title, Text } = Typography;
+const { TextArea } = Input;
+const { useToken } = theme;
 
 interface Entry {
   id: number;
@@ -53,6 +57,7 @@ export const EvaluationWorkspace: React.FC<EvaluationWorkspaceProps> = ({
   selectedEntry,
   onEvaluationSubmitted,
 }) => {
+  const { token } = useToken();
   const [copySuccess, setCopySuccess] = useState(false);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [selectedViolations, setSelectedViolations] = useState<number[]>([]);
@@ -217,9 +222,12 @@ export const EvaluationWorkspace: React.FC<EvaluationWorkspaceProps> = ({
 
   return (
     <Layout style={{ background: "transparent" }}>
-      <Sider width={400} style={{ padding: "16px" }}>
+      <Sider
+        width={400}
+        style={{ padding: "16px", background: token.colorBgContainer }}
+      >
         <div style={{ marginBottom: 16 }}>
-          <Space orientation="vertical" size={0} style={{ width: "100%" }}>
+          <Space direction="vertical" size={0} style={{ width: "100%" }}>
             <Space style={{ width: "100%", justifyContent: "space-between" }}>
               <Space>
                 <Text strong style={{ fontSize: 18 }}>
@@ -251,7 +259,7 @@ export const EvaluationWorkspace: React.FC<EvaluationWorkspaceProps> = ({
               </Space>
             </Descriptions.Item>
             <Descriptions.Item label="Employee">
-              <Space orientation="vertical" size={0}>
+              <Space direction="vertical" size={0}>
                 <Space>
                   <UserOutlined />
                   <Text>{selectedEntry.employeeName}</Text>
@@ -322,14 +330,10 @@ export const EvaluationWorkspace: React.FC<EvaluationWorkspaceProps> = ({
             style={{ height: "100%" }}
             loading={loadingRules}
           >
-            <Space
-              orientation="vertical"
-              size="large"
-              style={{ width: "100%" }}
-            >
+            <Space direction="vertical" size="large" style={{ width: "100%" }}>
               <div>
                 <Title level={5}>Select Violations</Title>
-                <Space orientation="vertical" style={{ width: "100%" }}>
+                <Space direction="vertical" style={{ width: "100%" }}>
                   {Array.isArray(evaluationRules) &&
                   evaluationRules.length > 0 ? (
                     evaluationRules.map((rule) => (
@@ -341,14 +345,14 @@ export const EvaluationWorkspace: React.FC<EvaluationWorkspaceProps> = ({
                         style={{
                           cursor: "pointer",
                           borderColor: selectedViolations.includes(rule.id)
-                            ? "#1890ff"
-                            : undefined,
+                            ? token.colorPrimary
+                            : token.colorBorder,
                           backgroundColor: selectedViolations.includes(rule.id)
-                            ? "#e6f7ff"
-                            : undefined,
+                            ? token.colorPrimaryBg
+                            : token.colorBgContainer,
                         }}
                       >
-                        <Space orientation="vertical" size={0}>
+                        <Space direction="vertical" size={0}>
                           <Text strong>{rule.ruleName}</Text>
                           <Text type="secondary" style={{ fontSize: 12 }}>
                             -{rule.deductionPoints} points
@@ -374,25 +378,22 @@ export const EvaluationWorkspace: React.FC<EvaluationWorkspaceProps> = ({
 
               <div>
                 <Title level={5}>Comments (Optional)</Title>
-                <textarea
+                <TextArea
                   value={comments}
                   onChange={(e) => setComments(e.target.value)}
                   placeholder="Add any additional comments..."
-                  style={{
-                    width: "100%",
-                    minHeight: 100,
-                    padding: 8,
-                    borderRadius: 4,
-                    // border: "1px solid #d9d9d9",
-                    fontFamily: "inherit",
-                  }}
+                  rows={4}
+                  style={{ resize: "vertical" }}
                 />
               </div>
 
               <Card size="small">
-                <Space orientation="vertical" size={0}>
+                <Space direction="vertical" size={0}>
                   <Text type="secondary">Calculated Score:</Text>
-                  <Title level={2} style={{ margin: 0, color: "#1890ff" }}>
+                  <Title
+                    level={2}
+                    style={{ margin: 0, color: token.colorPrimary }}
+                  >
                     {calculateScore()} / 100
                   </Title>
                 </Space>

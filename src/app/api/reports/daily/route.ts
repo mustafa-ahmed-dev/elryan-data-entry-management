@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth/config";
 import { checkPermission, getUserPermissions } from "@/db/utils/permissions";
-import { getEntryStats, getDailyEntryCounts } from "@/db/utils/entries";
+import { getEntryStats } from "@/db/utils/entries";
 import { getEvaluationStats } from "@/db/utils/evaluations";
 import {
   ApiErrors,
@@ -104,17 +104,17 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
   ]);
 
   // Get daily trends if date range provided
-  let dailyTrends;
-  if (filters.startDate && filters.endDate) {
-    dailyTrends = await getDailyEntryCounts(
-      filters.startDate,
-      filters.endDate,
-      {
-        employeeId: filters.employeeId,
-        teamId: filters.teamId,
-      }
-    );
-  }
+  // let dailyTrends;
+  // if (filters.startDate && filters.endDate) {
+  //   dailyTrends = await getDailyEntryCounts(
+  //     filters.startDate,
+  //     filters.endDate,
+  //     {
+  //       employeeId: filters.employeeId,
+  //       teamId: filters.teamId,
+  //     }
+  //   );
+  // }
 
   return NextResponse.json(
     {
@@ -122,7 +122,7 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
       data: {
         entries: entryStats,
         evaluations: evaluationStats,
-        dailyTrends,
+        // dailyTrends,
         dateRange: {
           start: filters.startDate,
           end: filters.endDate,

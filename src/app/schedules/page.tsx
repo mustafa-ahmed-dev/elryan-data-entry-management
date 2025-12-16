@@ -17,8 +17,7 @@ import {
   CloseCircleOutlined,
   CalendarOutlined,
 } from "@ant-design/icons";
-import { useAuth } from "@/lib/hooks/useAuth";
-import { useSchedules } from "@/lib/hooks/useSchedules";
+import { useAuth, useSchedules } from "@/lib/hooks";
 import {
   BulkScheduleForm,
   PendingApprovalsTable,
