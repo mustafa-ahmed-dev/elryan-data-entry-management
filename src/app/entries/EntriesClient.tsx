@@ -54,7 +54,6 @@ export function EntriesClient({ user }: EntriesClientProps) {
   const [activeTab, setActiveTab] = useState("1");
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [users, setUsers] = useState<any[]>([]);
   const [statistics, setStatistics] = useState<Statistics>({
     total: 0,
     today: 0,
@@ -76,10 +75,7 @@ export function EntriesClient({ user }: EntriesClientProps) {
 
   useEffect(() => {
     fetchEntryTypes();
-    fetchUsers();
   }, []);
-
-  const canBulkCreate = user.role === "admin" || user.role === "team_leader";
 
   const fetchEntryTypes = async () => {
     try {
@@ -90,18 +86,6 @@ export function EntriesClient({ user }: EntriesClientProps) {
       }
     } catch (error) {
       console.error("Failed to fetch entry types:", error);
-    }
-  };
-
-  const fetchUsers = async () => {
-    try {
-      const response = await fetch("/api/users");
-      if (response.ok) {
-        const result = await response.json();
-        setUsers(result.data || result || []);
-      }
-    } catch (error) {
-      console.error("Failed to fetch users:", error);
     }
   };
 
@@ -209,7 +193,7 @@ export function EntriesClient({ user }: EntriesClientProps) {
       const response = await fetch("/api/entries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(entries), // Array of entries
+        body: JSON.stringify(entries),
       });
 
       const result = await response.json();
@@ -221,7 +205,7 @@ export function EntriesClient({ user }: EntriesClientProps) {
         };
       }
 
-      // Refresh data
+      // Refresh the entries list and statistics
       await fetchEntries();
       await fetchStatistics();
 
@@ -254,6 +238,9 @@ export function EntriesClient({ user }: EntriesClientProps) {
       throw error;
     }
   };
+
+  // Check if user can use bulk upload (admin or team_leader)
+  const canBulkCreate = user.role === "admin" || user.role === "team_leader";
 
   const tabItems = [
     {
@@ -300,6 +287,7 @@ export function EntriesClient({ user }: EntriesClientProps) {
     },
   ];
 
+  // Add bulk CSV upload tab for admins and team leaders
   if (canBulkCreate) {
     tabItems.push({
       key: "3",
@@ -312,7 +300,8 @@ export function EntriesClient({ user }: EntriesClientProps) {
       children: (
         <BulkEntryCSVForm
           entryTypes={entryTypes}
-          users={users}
+          employeeId={user.id}
+          employeeName={user.name}
           onSubmit={handleBulkCreateEntries}
         />
       ),

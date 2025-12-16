@@ -10,7 +10,6 @@ import { useState } from "react";
 import { Tabs, Card, Alert } from "antd";
 import {
   SafetyOutlined,
-  AuditOutlined,
   SettingOutlined,
   HistoryOutlined,
 } from "@ant-design/icons";

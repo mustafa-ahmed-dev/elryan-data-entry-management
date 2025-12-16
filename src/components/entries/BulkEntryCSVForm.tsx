@@ -1,7 +1,8 @@
 /**
  * Bulk Entry CSV Form Component
  *
- * Upload CSV file to create multiple entries at once
+ * Upload CSV file to create multiple entries for the current user
+ * Simple format: entry_type, sku
  */
 
 "use client";
@@ -14,10 +15,8 @@ import {
   Space,
   Alert,
   Table,
-  Select,
   message,
   Typography,
-  Divider,
   Steps,
 } from "antd";
 import {
@@ -32,26 +31,24 @@ const { Title, Text, Paragraph } = Typography;
 
 interface BulkEntryCSVFormProps {
   entryTypes: Array<{ id: number; name: string }>;
-  users: Array<{ id: number; fullName: string; email: string }>;
+  employeeId: number;
+  employeeName: string;
   onSubmit: (
     entries: any[]
   ) => Promise<{ success: boolean; message?: string; error?: string }>;
 }
 
 interface ParsedEntry {
-  employeeEmail: string;
-  employeeName?: string;
-  employeeId?: number;
   entryTypeName: string;
   entryTypeId?: number;
   sku: string;
-  entryTime?: string;
   error?: string;
 }
 
 export function BulkEntryCSVForm({
   entryTypes,
-  users,
+  employeeId,
+  employeeName,
   onSubmit,
 }: BulkEntryCSVFormProps) {
   const [currentStep, setCurrentStep] = useState(0);
@@ -71,7 +68,7 @@ export function BulkEntryCSVForm({
     const data: ParsedEntry[] = [];
 
     // Validate required headers
-    const requiredHeaders = ["employee_email", "entry_type", "sku"];
+    const requiredHeaders = ["entry_type", "sku"];
     const missingHeaders = requiredHeaders.filter((h) => !headers.includes(h));
 
     if (missingHeaders.length > 0) {
@@ -81,7 +78,10 @@ export function BulkEntryCSVForm({
 
     // Parse data rows
     for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(",").map((v) => v.trim());
+      const line = lines[i].trim();
+      if (!line) continue; // Skip empty lines
+
+      const values = line.split(",").map((v) => v.trim());
       if (values.length !== headers.length) continue;
 
       const row: any = {};
@@ -90,10 +90,8 @@ export function BulkEntryCSVForm({
       });
 
       data.push({
-        employeeEmail: row.employee_email || "",
         entryTypeName: row.entry_type || "",
         sku: row.sku || "",
-        entryTime: row.entry_time || "",
       });
     }
 
@@ -107,20 +105,6 @@ export function BulkEntryCSVForm({
     const validated = data.map((entry, index) => {
       const rowNum = index + 2; // +2 for header row and 0-based index
       let error = "";
-
-      // Find employee
-      const employee = users.find(
-        (u) => u.email.toLowerCase() === entry.employeeEmail.toLowerCase()
-      );
-      if (!employee) {
-        error += `Employee not found. `;
-        errors.push(
-          `Row ${rowNum}: Employee email "${entry.employeeEmail}" not found`
-        );
-      } else {
-        entry.employeeId = employee.id;
-        entry.employeeName = employee.fullName;
-      }
 
       // Find entry type
       const entryType = entryTypes.find(
@@ -172,9 +156,11 @@ export function BulkEntryCSVForm({
   // Download sample CSV
   const downloadSampleCSV = () => {
     const sampleData = [
-      ["employee_email", "entry_type", "sku", "entry_time"],
-      ["john.doe@example.com", "Product Entry", "SKU12345", "2024-01-15 09:30"],
-      ["jane.smith@example.com", "Brand Entry", "SKU67890", "2024-01-15 10:00"],
+      ["entry_type", "sku"],
+      ["Product Entry", "SKU12345"],
+      ["Brand Entry", "SKU67890"],
+      ["Product Entry", "PROD-ABC-123"],
+      ["SKU Update", "ITEM-XYZ-001"],
     ];
 
     const csv = sampleData.map((row) => row.join(",")).join("\n");
@@ -199,10 +185,9 @@ export function BulkEntryCSVForm({
     setLoading(true);
 
     const entries = validEntries.map((entry) => ({
-      employeeId: entry.employeeId!,
+      employeeId: employeeId,
       entryTypeId: entry.entryTypeId!,
       sku: entry.sku,
-      entryTime: entry.entryTime ? new Date(entry.entryTime) : undefined,
     }));
 
     const result = await onSubmit(entries);
@@ -231,43 +216,25 @@ export function BulkEntryCSVForm({
     {
       title: "Row",
       key: "row",
-      width: 60,
+      width: 80,
       render: (_: any, __: any, index: number) => index + 1,
-    },
-    {
-      title: "Employee",
-      dataIndex: "employeeEmail",
-      key: "employeeEmail",
-      render: (email: string, record: ParsedEntry) => (
-        <Space orientation="vertical" size={0}>
-          <Text>{email}</Text>
-          {record.employeeName && (
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              {record.employeeName}
-            </Text>
-          )}
-        </Space>
-      ),
     },
     {
       title: "Entry Type",
       dataIndex: "entryTypeName",
       key: "entryTypeName",
+      width: 200,
     },
     {
       title: "SKU",
       dataIndex: "sku",
       key: "sku",
-    },
-    {
-      title: "Entry Time",
-      dataIndex: "entryTime",
-      key: "entryTime",
-      render: (time: string) => time || "Now",
+      width: 200,
     },
     {
       title: "Status",
       key: "status",
+      width: 250,
       render: (_: any, record: ParsedEntry) =>
         record.error ? (
           <Text type="danger">{record.error}</Text>
@@ -304,34 +271,43 @@ export function BulkEntryCSVForm({
 
   return (
     <Card>
-      <Space orientation="vertical" size="large" style={{ width: "100%" }}>
+      <Space direction="vertical" size="large" style={{ width: "100%" }}>
         <div>
           <Title level={4}>Bulk Entry Creation via CSV</Title>
           <Paragraph type="secondary">
-            Upload a CSV file to create multiple entries at once. Download the
-            sample CSV to see the required format.
+            Upload a CSV file to create multiple entries at once for{" "}
+            <strong>{employeeName}</strong>. All entries will be timestamped
+            with the current time.
           </Paragraph>
         </div>
+
+        <Alert
+          message={`All entries will be created for: ${employeeName}`}
+          description="Entry timestamps will be set to the current time automatically"
+          type="info"
+          showIcon
+        />
 
         <Steps current={currentStep} items={steps} />
 
         {currentStep === 0 && (
           <>
             <Alert
-              title="CSV Format Requirements"
+              message="CSV Format Requirements"
               description={
                 <ul style={{ marginBottom: 0, paddingLeft: 20 }}>
                   <li>
-                    <strong>Required columns:</strong> employee_email,
-                    entry_type, sku
+                    <strong>Required columns:</strong> entry_type, sku
                   </li>
                   <li>
-                    <strong>Optional columns:</strong> entry_time (format:
-                    YYYY-MM-DD HH:mm)
+                    Entry type must match existing entry type name
+                    (case-insensitive)
                   </li>
-                  <li>Employee email must match existing user</li>
-                  <li>Entry type must match existing entry type name</li>
                   <li>SKU must be at least 2 characters</li>
+                  <li>
+                    All entries will be created under your account with current
+                    timestamp
+                  </li>
                 </ul>
               }
               type="info"
@@ -363,10 +339,10 @@ export function BulkEntryCSVForm({
 
         {currentStep === 1 && csvData.length > 0 && (
           <>
-            <Space orientation="vertical" style={{ width: "100%" }}>
+            <Space direction="vertical" style={{ width: "100%" }}>
               {validationErrors.length > 0 && (
                 <Alert
-                  title="Validation Errors"
+                  message="Validation Errors"
                   description={
                     <ul style={{ marginBottom: 0, paddingLeft: 20 }}>
                       {validationErrors.slice(0, 10).map((error, idx) => (
@@ -385,7 +361,7 @@ export function BulkEntryCSVForm({
               )}
 
               <Alert
-                title={`Found ${csvData.length} entries: ${validCount} valid, ${errorCount} with errors`}
+                message={`Found ${csvData.length} entries: ${validCount} valid, ${errorCount} with errors`}
                 type={errorCount === 0 ? "success" : "warning"}
                 showIcon
               />
@@ -395,7 +371,7 @@ export function BulkEntryCSVForm({
                 dataSource={csvData}
                 rowKey={(_, idx) => idx || 0}
                 pagination={{ pageSize: 10 }}
-                scroll={{ x: 800 }}
+                scroll={{ x: 700 }}
                 size="small"
                 rowClassName={(record) =>
                   record.error ? "ant-table-row-error" : ""
@@ -429,8 +405,8 @@ export function BulkEntryCSVForm({
 
         {currentStep === 2 && (
           <Alert
-            title="Success!"
-            description="Bulk entries have been created successfully."
+            message="Success!"
+            description={`Successfully created ${validCount} entries for ${employeeName}.`}
             type="success"
             showIcon
           />
