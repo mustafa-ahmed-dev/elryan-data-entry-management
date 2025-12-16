@@ -227,7 +227,7 @@ export const EvaluationWorkspace: React.FC<EvaluationWorkspaceProps> = ({
         style={{ padding: "16px", background: token.colorBgContainer }}
       >
         <div style={{ marginBottom: 16 }}>
-          <Space direction="vertical" size={0} style={{ width: "100%" }}>
+          <Space orientation="vertical" size={0} style={{ width: "100%" }}>
             <Space style={{ width: "100%", justifyContent: "space-between" }}>
               <Space>
                 <Text strong style={{ fontSize: 18 }}>
@@ -259,7 +259,7 @@ export const EvaluationWorkspace: React.FC<EvaluationWorkspaceProps> = ({
               </Space>
             </Descriptions.Item>
             <Descriptions.Item label="Employee">
-              <Space direction="vertical" size={0}>
+              <Space orientation="vertical" size={0}>
                 <Space>
                   <UserOutlined />
                   <Text>{selectedEntry.employeeName}</Text>
@@ -330,10 +330,14 @@ export const EvaluationWorkspace: React.FC<EvaluationWorkspaceProps> = ({
             style={{ height: "100%" }}
             loading={loadingRules}
           >
-            <Space direction="vertical" size="large" style={{ width: "100%" }}>
+            <Space
+              orientation="vertical"
+              size="large"
+              style={{ width: "100%" }}
+            >
               <div>
                 <Title level={5}>Select Violations</Title>
-                <Space direction="vertical" style={{ width: "100%" }}>
+                <Space orientation="vertical" style={{ width: "100%" }}>
                   {Array.isArray(evaluationRules) &&
                   evaluationRules.length > 0 ? (
                     evaluationRules.map((rule) => (
@@ -352,7 +356,7 @@ export const EvaluationWorkspace: React.FC<EvaluationWorkspaceProps> = ({
                             : token.colorBgContainer,
                         }}
                       >
-                        <Space direction="vertical" size={0}>
+                        <Space orientation="vertical" size={0}>
                           <Text strong>{rule.ruleName}</Text>
                           <Text type="secondary" style={{ fontSize: 12 }}>
                             -{rule.deductionPoints} points
@@ -388,7 +392,7 @@ export const EvaluationWorkspace: React.FC<EvaluationWorkspaceProps> = ({
               </div>
 
               <Card size="small">
-                <Space direction="vertical" size={0}>
+                <Space orientation="vertical" size={0}>
                   <Text type="secondary">Calculated Score:</Text>
                   <Title
                     level={2}

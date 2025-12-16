@@ -169,7 +169,7 @@ export function BulkScheduleForm({
       key: day,
       width: 200,
       render: (_: any, record: ScheduleRow) => (
-        <Space direction="vertical" size="small" style={{ width: "100%" }}>
+        <Space orientation="vertical" size="small" style={{ width: "100%" }}>
           <Switch
             size="small"
             checked={record[day].isWorking}
@@ -219,7 +219,7 @@ export function BulkScheduleForm({
   return (
     <Form form={form} layout="vertical">
       <Card title="Bulk Schedule Creation" style={{ marginBottom: 16 }}>
-        <Space size="large" style={{ width: "100%" }} direction="vertical">
+        <Space size="large" style={{ width: "100%" }} orientation="vertical">
           <Space size="large">
             <Form.Item
               label="Select Team"

@@ -271,7 +271,7 @@ export function BulkEntryCSVForm({
 
   return (
     <Card>
-      <Space direction="vertical" size="large" style={{ width: "100%" }}>
+      <Space orientation="vertical" size="large" style={{ width: "100%" }}>
         <div>
           <Title level={4}>Bulk Entry Creation via CSV</Title>
           <Paragraph type="secondary">
@@ -282,7 +282,7 @@ export function BulkEntryCSVForm({
         </div>
 
         <Alert
-          message={`All entries will be created for: ${employeeName}`}
+          title={`All entries will be created for: ${employeeName}`}
           description="Entry timestamps will be set to the current time automatically"
           type="info"
           showIcon
@@ -293,7 +293,7 @@ export function BulkEntryCSVForm({
         {currentStep === 0 && (
           <>
             <Alert
-              message="CSV Format Requirements"
+              title="CSV Format Requirements"
               description={
                 <ul style={{ marginBottom: 0, paddingLeft: 20 }}>
                   <li>
@@ -339,10 +339,10 @@ export function BulkEntryCSVForm({
 
         {currentStep === 1 && csvData.length > 0 && (
           <>
-            <Space direction="vertical" style={{ width: "100%" }}>
+            <Space orientation="vertical" style={{ width: "100%" }}>
               {validationErrors.length > 0 && (
                 <Alert
-                  message="Validation Errors"
+                  title="Validation Errors"
                   description={
                     <ul style={{ marginBottom: 0, paddingLeft: 20 }}>
                       {validationErrors.slice(0, 10).map((error, idx) => (
@@ -361,7 +361,7 @@ export function BulkEntryCSVForm({
               )}
 
               <Alert
-                message={`Found ${csvData.length} entries: ${validCount} valid, ${errorCount} with errors`}
+                title={`Found ${csvData.length} entries: ${validCount} valid, ${errorCount} with errors`}
                 type={errorCount === 0 ? "success" : "warning"}
                 showIcon
               />
@@ -405,7 +405,7 @@ export function BulkEntryCSVForm({
 
         {currentStep === 2 && (
           <Alert
-            message="Success!"
+            title="Success!"
             description={`Successfully created ${validCount} entries for ${employeeName}.`}
             type="success"
             showIcon

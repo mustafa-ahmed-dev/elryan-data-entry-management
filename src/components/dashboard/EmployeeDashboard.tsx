@@ -113,7 +113,7 @@ export function EmployeeDashboard() {
     }));
 
   return (
-    <Space direction="vertical" size="large" style={{ width: "100%" }}>
+    <Space orientation="vertical" size="large" style={{ width: "100%" }}>
       {/* Personal Statistics */}
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} lg={6}>

@@ -174,7 +174,7 @@ export function ScheduleDetailModal({
       width={900}
     >
       <Spin spinning={loading}>
-        <Space direction="vertical" size="large" style={{ width: "100%" }}>
+        <Space orientation="vertical" size="large" style={{ width: "100%" }}>
           <Card>
             <Descriptions bordered column={2}>
               <Descriptions.Item label="Employee">

@@ -139,7 +139,7 @@ function SchedulesContent() {
         <>
           {usersError && (
             <Alert
-              message="Error Loading Users"
+              title="Error Loading Users"
               description={usersError}
               type="error"
               showIcon
